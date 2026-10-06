@@ -1,0 +1,51 @@
+{
+  "printer": {
+    "id": "TESTING-PRINTER",
+    "model": "ZT620",
+    "ip": "192.168.41.254",
+    "port": 9100,
+    "connectionTimeoutMs": 5000,
+    "responseTimeoutMs": 2000
+  },
+
+  "api": {
+    "url": "http://192.168.10.100:3000/api/printer-meter",
+    "method": "POST",
+    "timeoutSeconds": 10,
+    "apiKey": ""
+  },
+
+  "meters": [
+    {
+      "name": "totalLabelCount",
+      "command": "! U1 getvar \"odometer.total_label_count\""
+    },
+    {
+      "name": "totalPrintLength",
+      "command": "! U1 getvar \"odometer.total_print_length\""
+    },
+    {
+      "name": "printheadOdometer",
+      "command": "! U1 getvar \"device.printhead.odometer\""
+    },
+    {
+      "name": "headUsage",
+      "command": "! U1 getvar \"odometer.headnew\""
+    },
+    {
+      "name": "ribbonLength",
+      "command": "! U1 getvar \"odometer.net_ribbon_length\""
+    },
+    {
+      "name": "mediaLength",
+      "command": "! U1 getvar \"odometer.net_media_length\""
+    }
+  ],
+
+  "logging": {
+    "enabled": true,
+    "directory": "C:\\MES\\ZebraMeter\\logs",
+    "fileName": "zebra-meter.log",
+    "keepDays": 30
+  }
+}
