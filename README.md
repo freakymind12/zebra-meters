@@ -87,6 +87,8 @@ Catatan penting tentang alur:
 D:\Rian\PROJECT\ZebraMeter\
 │
 ├── collect-zebra.ps1            # Script utama — seluruh logika collector
+├── create-scheduler.ps1         # Buat Task Scheduler otomatis (interval 15 menit)
+├── delete-scheduler.ps1         # Hapus Task Scheduler (pembersihan saat PC dipindahtangankan)
 ├── config.json                  # Semua konfigurasi (printer, api, meters, logging)
 ├── README.md                    # Dokumentasi ini
 ├── ZEBRA-ZT620-USER-GUIDE.pdf   # Panduan resmi printer Zebra ZT620 (~54 MB)
@@ -459,9 +461,64 @@ Jika test ini sukses tapi script exit code 3, periksa kembali `api.url` / `api.m
 
 ## 11. Menjadwalkan Otomatis (Task Scheduler)
 
-Agar meter dibaca berkala (mis. tiap jam / tiap hari) tanpa menjalankan manual:
+Agar meter dibaca berkala **setiap 15 menit** tanpa menjalankan manual, project ini menyediakan 2 script siap pakai:
 
-### 11.1 Opsi A — Wrapper `.cmd` + Task Scheduler (disarankan)
+| Script | Fungsi |
+|---|---|
+| `create-scheduler.ps1` | Membuat task scheduler (interval 15 menit) |
+| `delete-scheduler.ps1` | Menghapus task — untuk pembersihan saat PC tidak dipakai lagi sebagai PC mesin printer |
+
+> ⚠️ Kedua script **harus dijalankan sebagai Administrator** (klik kanan → *Run as administrator*), karena task dibuat dengan akun **SYSTEM**.
+
+### 11.1 Membuat task — `create-scheduler.ps1` (disarankan)
+
+```powershell
+cd D:\Rian\PROJECT\ZebraMeter
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\create-scheduler.ps1"
+```
+
+Konfigurasi yang dibuat otomatis:
+
+| Item | Nilai |
+|---|---|
+| Task name | `ZebraMeter Collector` |
+| Interval | **Setiap 15 menit** — run pertama diselaraskan ke kelipatan :00 / :15 / :30 / :45 |
+| Action | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "...\collect-zebra.ps1"` |
+| Run as | **SYSTEM** (Highest) — tetap jalan walau tidak ada user login |
+| Settings | StartWhenAvailable · boleh di baterai · tidak dieksekusi dobel jika masih jalan · limit 10 menit |
+| Idempoten | Task sudah ada → dibuat ulang (overwrite otomatis) |
+
+Contoh output (diambil dari run nyata):
+
+```
+[2026-10-06 10:24:59] [INFO] Task created successfully.
+[2026-10-06 10:24:59] [INFO] Task Name    : ZebraMeter Collector
+[2026-10-06 10:24:59] [INFO] Schedule     : every 15 minutes
+[2026-10-06 10:24:59] [INFO] First Run    : 10/06/2026 10:30:00
+[2026-10-06 10:24:59] [INFO] Next Run     : 10/06/2026 10:30:00
+[2026-10-06 10:24:59] [INFO] Script       : D:\Rian\PROJECT\ZebraMeter\collect-zebra.ps1
+[2026-10-06 10:24:59] [INFO] Run As       : SYSTEM (Highest privileges)
+```
+
+Exit code: `0` sukses · `1` bukan admin · `2` `collect-zebra.ps1` tidak ditemukan · `99` error tak terduga.
+
+> **Catatan akses:** task dengan principal SYSTEM **tidak terbaca oleh akun biasa** — `Get-ScheduledTask` / `schtasks` dari token non-admin akan mengembalikan *Access is denied* (bukan "tidak ada"). Untuk melihat/mengelola task, buka *Task Scheduler* via Run as administrator.
+
+### 11.2 Menghapus task — `delete-scheduler.ps1`
+
+Untuk pembersihan ketika PC ini sudah tidak dipakai sebagai PC mesin printer:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\delete-scheduler.ps1"
+```
+
+- **Wajib Administrator** — cek admin dijalankan paling awal supaya tidak ada laporan "tidak ada" yang salah (*false negative*) saat token biasa tidak bisa membaca task.
+- Task ada → dihentikan dulu (jika sedang jalan) → dihapus → diverifikasi (`Task deleted successfully`).
+- Task tidak ada → `Task not found. Nothing to delete` (**exit 0**) — aman dijalankan berulang.
+
+Exit code: `0` sukses / tidak ada task · `1` bukan admin · `3` task masih ada setelah percobaan hapus · `99` error tak terduga.
+
+### 11.3 Opsi manual A — Wrapper `.cmd` + Task Scheduler
 
 Buat file `run-zebra-meter.cmd` di folder project:
 
@@ -480,7 +537,7 @@ Lalu di **Task Scheduler**:
 5. **Program/script:** `D:\Rian\PROJECT\ZebraMeter\run-zebra-meter.cmd`
 6. *(Opsional)* tab **Settings**: centang *Run task as soon as possible after a scheduled start is missed*, dan *If the task fails, restart every…*
 
-### 11.2 Opsi B — Langsung tanpa wrapper
+### 11.4 Opsi manual B — Langsung tanpa wrapper
 
 Pada langkah 5 di atas, isi:
 
@@ -490,12 +547,12 @@ Pada langkah 5 di atas, isi:
 | **Add arguments** | `-NoProfile -ExecutionPolicy Bypass -File "D:\Rian\PROJECT\ZebraMeter\collect-zebra.ps1"` |
 | **Start in (opsional)** | `D:\Rian\PROJECT\ZebraMeter` |
 
-### 11.3 Hal yang perlu diperhatikan untuk otomasi
+### 11.5 Hal yang perlu diperhatikan untuk otomasi
 
-- **Jalankan sebagai akun yang punya akses jaringan** ke printer (dan ke MES API bila diaktifkan). Jika memakai akun SYSTEM, pastikan jaringan masih terjangkau.
+- **Akses jaringan:** dengan script `create-scheduler.ps1`, task berjalan sebagai **SYSTEM** dan terbukti bisa menjangkau printer (run E2E tervalidasi di PC ini). Untuk setup manual, pastikan akun yang dipilih punya akses jaringan ke printer (dan ke MES API bila diaktifkan).
 - **Cek exit code** untuk monitoring: `0` = sukses, selain itu = gagal (lihat [bagian 7](#7-kode-keluaran-exit-code)).
 - Set `logging.enabled = true` agar semua run tercatat di file log untuk audit.
-- Interval tidak boleh terlalu cepat — satu run butuh ≈ 12–14 detik dengan konfigurasi default.
+- Interval 15 menit sangat aman — satu run hanya butuh ≈ 12–14 detik dengan konfigurasi default.
 
 ## 12. Troubleshooting
 
@@ -582,6 +639,7 @@ cd D:\Rian\PROJECT\ZebraMeter
 Test-NetConnection 192.168.41.254 -Port 9100          # 1. cek koneksi printer
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\collect-zebra.ps1"   # 2. jalankan
 Get-Content C:\MES\ZebraMeter\logs\zebra-meter.log -Tail 20                    # 3. cek log
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\create-scheduler.ps1"   # 4. (opsional) jadwalkan tiap 15 menit - jalankan sebagai Admin
 ```
 
 
