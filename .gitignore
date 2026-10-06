@@ -1,3 +1,7 @@
 # Logs
 logs/
 **/logs/
+
+# Printer User Guides
+printer_ug/
+**/printer_ug/
