@@ -88,7 +88,9 @@ D:\Rian\PROJECT\ZebraMeter\
 │
 ├── collect-zebra.ps1            # Script utama — seluruh logika collector
 ├── create-scheduler.ps1         # Buat Task Scheduler otomatis (interval 15 menit)
+├── create-scheduler.bat         # Launcher double-click untuk create-scheduler.ps1 (auto-elevasi UAC)
 ├── delete-scheduler.ps1         # Hapus Task Scheduler (pembersihan saat PC dipindahtangankan)
+├── delete-scheduler.bat         # Launcher double-click untuk delete-scheduler.ps1 (auto-elevasi UAC)
 ├── config.json                  # Semua konfigurasi (printer, api, meters, logging)
 ├── README.md                    # Dokumentasi ini
 ├── ZEBRA-ZT620-USER-GUIDE.pdf   # Panduan resmi printer Zebra ZT620 (~54 MB)
@@ -469,6 +471,22 @@ Agar meter dibaca berkala **setiap 15 menit** tanpa menjalankan manual, project 
 | `delete-scheduler.ps1` | Menghapus task — untuk pembersihan saat PC tidak dipakai lagi sebagai PC mesin printer |
 
 > ⚠️ Kedua script **harus dijalankan sebagai Administrator** (klik kanan → *Run as administrator*), karena task dibuat dengan akun **SYSTEM**.
+
+**Cara termudah — double-click file `.bat` (tanpa perlu membuka PowerShell):**
+
+| File `.bat` | Fungsi |
+|---|---|
+| `create-scheduler.bat` | Double-click → buat task scheduler (interval 15 menit) |
+| `delete-scheduler.bat` | Double-click → hapus task scheduler |
+
+Cara kerja launcher `.bat`:
+
+1. Double-click file `.bat`; jika muncul dialog UAC, klik **Yes**.
+2. Launcher mengecek apakah sudah berjalan sebagai Administrator. Jika **belum**, launcher otomatis **membuka ulang dirinya sendiri dengan hak Administrator** (elevasi UAC) — tidak perlu klik kanan → *Run as administrator* secara manual.
+3. Launcher otomatis `cd` ke folder tempat file `.bat` berada (sehingga `config.json` selalu ditemukan), lalu memanggil script PowerShell dengan `-NoProfile -ExecutionPolicy Bypass`.
+4. Jendela tetap terbuka sampai Anda menekan tombol apa pun, supaya output dan exit code bisa dibaca.
+
+> Launcher `.bat` menjalankan script `.ps1` yang **sama persis** dengan cara manual pada 11.1 dan 11.2 — hasilnya identik. Jika UAC dibatalkan, launcher keluar dengan **exit code 1**.
 
 ### 11.1 Membuat task — `create-scheduler.ps1` (disarankan)
 
