@@ -1,0 +1,74 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="QYc8fhozH0pkZdn61is3">
+    <mxGraphModel dx="858" dy="519" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-23" edge="1" parent="1" source="uTgTCTyvWv8ai2_ER3ML-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="315" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-4" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="MES STATION" vertex="1">
+          <mxGeometry height="60" width="70" x="280" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-5" edge="1" parent="1" source="uTgTCTyvWv8ai2_ER3ML-6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;endArrow=none;endFill=0;" target="uTgTCTyvWv8ai2_ER3ML-4">
+          <mxGeometry relative="1" x="0.6667" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-6" parent="1" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="Zebra Printer" vertex="1">
+          <mxGeometry height="60" width="70" x="90" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-7" edge="1" parent="1" source="uTgTCTyvWv8ai2_ER3ML-4" style="endArrow=none;dashed=1;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="uTgTCTyvWv8ai2_ER3ML-8" value="">
+          <mxGeometry height="50" relative="1" width="50" as="geometry">
+            <mxPoint x="560" y="320" as="sourcePoint" />
+            <mxPoint x="520" y="160" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-9" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="HTTP POST" vertex="1">
+          <mxGeometry height="30" width="60" x="380" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-10" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="TCP IP" vertex="1">
+          <mxGeometry height="30" width="60" x="190" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-12" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=left;verticalAlign=top;rounded=0;" value="&lt;div style=&quot;&quot;&gt;&lt;b&gt;JOBS&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;1. Execute TCP IP command to printer for get metric status&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;2. HTTP POST to API send json format metric printer with identity&lt;br&gt;&lt;br&gt;This running on background every 15 minutes&lt;br&gt;&lt;br&gt;Script made in Powershell script with &lt;i&gt;.ps1 &lt;/i&gt;extention&lt;/div&gt;" vertex="1">
+          <mxGeometry height="200" width="175" x="237.5" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-47" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="220" width="320" x="470" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-29" parent="uTgTCTyvWv8ai2_ER3ML-47" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;dashed=1;" value="" vertex="1">
+          <mxGeometry height="220" width="320" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-15" edge="1" parent="uTgTCTyvWv8ai2_ER3ML-47" source="uTgTCTyvWv8ai2_ER3ML-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;startArrow=classic;startFill=1;" target="uTgTCTyvWv8ai2_ER3ML-16">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="70.33333333333348" y="130" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-17" edge="1" parent="uTgTCTyvWv8ai2_ER3ML-47" source="uTgTCTyvWv8ai2_ER3ML-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;startArrow=classic;startFill=1;" target="uTgTCTyvWv8ai2_ER3ML-14">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-8" parent="uTgTCTyvWv8ai2_ER3ML-47" style="rounded=1;whiteSpace=wrap;html=1;roundedPerimeter=1;" value="SERVER&lt;br&gt;(API)" vertex="1">
+          <mxGeometry height="60" width="120" x="10" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-16" parent="uTgTCTyvWv8ai2_ER3ML-47" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" value="MySQL&lt;div&gt;DB&lt;/div&gt;" vertex="1">
+          <mxGeometry height="80" width="60" x="40" y="130" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-19" connectable="0" parent="uTgTCTyvWv8ai2_ER3ML-47" style="group" value="" vertex="1">
+          <mxGeometry height="90" width="64.51999999999998" x="240" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-14" parent="uTgTCTyvWv8ai2_ER3ML-19" style="sketch=0;pointerEvents=1;shadow=0;dashed=0;html=1;strokeColor=none;fillColor=#434445;aspect=fixed;labelPosition=center;verticalLabelPosition=bottom;verticalAlign=top;align=center;outlineConnect=0;shape=mxgraph.vvd.nsx_dashboard;" value="" vertex="1">
+          <mxGeometry height="60" width="64.52" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-18" parent="uTgTCTyvWv8ai2_ER3ML-19" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="Dashboard" vertex="1">
+          <mxGeometry height="20" width="60" x="2.259999999999991" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-25" parent="uTgTCTyvWv8ai2_ER3ML-47" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="HTTP" vertex="1">
+          <mxGeometry height="30" width="60" x="155" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="uTgTCTyvWv8ai2_ER3ML-49" parent="uTgTCTyvWv8ai2_ER3ML-47" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;" value="&lt;div&gt;Countainerized Using &lt;b style=&quot;&quot;&gt;Docker&lt;/b&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="30" width="85" x="190" y="160" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
