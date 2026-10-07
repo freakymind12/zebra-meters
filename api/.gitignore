@@ -1,0 +1,13 @@
+# deps
+node_modules/
+
+# environment (berisi kredensial)
+.env
+.env.local
+
+# drizzle artifacts
+drizzle/
+
+# runtime logs
+*.log
+

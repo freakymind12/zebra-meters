@@ -1,0 +1,82 @@
+# =============================================================================
+# ZebraMeter — Database stack (MySQL + phpMyAdmin)
+# Dipakai sebagai database untuk API (endpoint /api/printer-meter).
+#
+# Cara pakai:
+#   docker compose up -d        # start MySQL + phpMyAdmin
+#   docker compose ps           # cek status
+#   docker compose down         # stop (data TETAP tersimpan di named volume)
+#   docker compose down -v      # stop + HAPUS data (berhati-hatilah)
+#
+# Akses:
+#   phpMyAdmin : http://localhost:8080
+#   MySQL      : localhost:3306 (atau dari container lain: mysql:3306)
+#
+# Kredensial / konfigurasi bisa di-override lewat file .env di folder ini
+# (nilai default sudah disediakan oleh compose jika variable tidak didefinisikan).
+# =============================================================================
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: zebrameter-mysql
+    restart: unless-stopped
+    ports:
+      # "3306:3306" -> akses dari host; ganti jadi "3307:3306" jika port 3306 sudah dipakai
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-zebrameter_db}"
+      MYSQL_USER: "${MYSQL_USER:-zebrameter}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-zebrameter_secret}"
+      TZ: "${TZ:-Asia/Jakarta}"
+    volumes:
+      # Persistensi data — tidak hilang saat container di-recreate
+      - mysql_data:/var/lib/mysql
+      # (Opsional) eksekusi .sql awal saat pertama kali data dir dibuat:
+      # - ./db/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+07:00
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - zebrameter-net
+
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    container_name: zebrameter-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${PMA_PORT:-8080}:80"
+    environment:
+      PMA_HOST: mysql          # nama service MySQL di jaringan compose
+      PMA_PORT: "3306"
+      PMA_ARBITRARY: "1"       # izinkan login manual ke host lain jika perlu
+      UPLOAD_LIMIT: "64M"
+      TZ: "${TZ:-Asia/Jakarta}"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - zebrameter-net
+
+volumes:
+  mysql_data:
+    name: zebrameter-mysql-data
+
+networks:
+  zebrameter-net:
+    name: zebrameter-net
+
