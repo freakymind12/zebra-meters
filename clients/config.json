@@ -1,7 +1,5 @@
 {
   "printer": {
-    "id": "TESTING-PRINTER",
-    "model": "ZT620",
     "ip": "192.168.41.254",
     "port": 9100,
     "connectionTimeoutMs": 5000,

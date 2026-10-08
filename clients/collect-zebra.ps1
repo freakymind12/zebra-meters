@@ -51,6 +51,16 @@ $Script:CollectorHostname = [System.Environment]::MachineName
 $Script:CollectorIp = $null
 
 # ------------------------------------------------------------
+# PRINTER IDENTITY (serial + model)
+# ------------------------------------------------------------
+# Diisi otomatis dari printer via TCP setelah koneksi berhasil
+# (lihat fungsi Get-PrinterIdentity). Tidak lagi dari config.json.
+# ------------------------------------------------------------
+
+$Script:PrinterId = $null
+$Script:PrinterModel = $null
+
+# ------------------------------------------------------------
 # FUNCTIONS
 # ------------------------------------------------------------
 
@@ -98,8 +108,6 @@ function Write-Log {
 function Test-Configuration {
 
     $RequiredValues = @(
-        $Config.printer.id,
-        $Config.printer.model,
         $Config.printer.ip,
         $Config.printer.port,
         $Config.api.url
@@ -324,6 +332,78 @@ function Get-ZebraValue {
 }
 
 
+function Get-PrinterIdentity {
+
+    # --------------------------------------------------------
+    # AMBIL IDENTITAS PRINTER VIA TCP (Link-OS getvar)
+    # --------------------------------------------------------
+    # Serial : ! U1 getvar "usb.device.serial_string"
+    #          -> "ABC1234567890"
+    # Model  : ! U1 getvar "device.host_identification"
+    #          -> "ZT620,V1.0.0,8dpm,4096KB,"
+    #          (model = field pertama sebelum koma)
+    #
+    # Printer membalas "?" jika variabel tidak dikenal /
+    # tidak didukung firmware -> dianggap gagal.
+    # --------------------------------------------------------
+
+    param (
+        [string]$IPAddress,
+        [int]$Port,
+        [int]$ConnectionTimeoutMs,
+        [int]$ResponseTimeoutMs
+    )
+
+    # --------------------
+    # SERIAL NUMBER
+    # --------------------
+
+    Write-Log `
+        -Message "Reading printer serial number..."
+
+    $RawSerial = Get-ZebraValue `
+        -IPAddress $IPAddress `
+        -Port $Port `
+        -Command '! U1 getvar "usb.device.serial_string"' `
+        -ConnectionTimeoutMs $ConnectionTimeoutMs `
+        -ResponseTimeoutMs $ResponseTimeoutMs
+
+    $Serial = $RawSerial.Trim().Trim('"').Trim()
+
+    if ([string]::IsNullOrWhiteSpace($Serial) -or $Serial -eq '?') {
+        throw "Serial number not available (response: '$RawSerial')"
+    }
+
+    # --------------------
+    # MODEL
+    # --------------------
+
+    Write-Log `
+        -Message "Reading printer model..."
+
+    $RawIdent = Get-ZebraValue `
+        -IPAddress $IPAddress `
+        -Port $Port `
+        -Command '! U1 getvar "device.host_identification"' `
+        -ConnectionTimeoutMs $ConnectionTimeoutMs `
+        -ResponseTimeoutMs $ResponseTimeoutMs
+
+    # "ZT620,V1.0.0,8dpm,4096KB," -> "ZT620"
+    $Model = (
+        $RawIdent.Trim().Trim('"') -split ','
+    )[0].Trim()
+
+    if ([string]::IsNullOrWhiteSpace($Model) -or $Model -eq '?') {
+        throw "Printer model not available (response: '$RawIdent')"
+    }
+
+    return @{
+        Id = $Serial
+        Model = $Model
+    }
+}
+
+
 function Parse-NumericValue {
 
     param (
@@ -464,8 +544,8 @@ function Send-ToApi {
     }
 
     $PayloadObject = @{
-        printerId = $Config.printer.id
-        model = $Config.printer.model
+        printerId = $Script:PrinterId
+        model = $Script:PrinterModel
         ipAddress = $Config.printer.ip
         measuredAt = $Timestamp.ToString("o")
 
@@ -550,16 +630,12 @@ try {
         exit 1
     }
 
-    $PrinterId = $Config.printer.id
-    $PrinterModel = $Config.printer.model
     $PrinterIP = $Config.printer.ip
     $PrinterPort = [int]$Config.printer.port
 
     $ConnectionTimeoutMs = [int]$Config.printer.connectionTimeoutMs
     $ResponseTimeoutMs = [int]$Config.printer.responseTimeoutMs
 
-    Write-Log "Printer ID    : $PrinterId"
-    Write-Log "Printer Model : $PrinterModel"
     Write-Log "Printer IP    : $PrinterIP"
     Write-Log "Printer Port  : $PrinterPort"
 
@@ -580,6 +656,39 @@ try {
 
         exit 2
     }
+
+    # --------------------------------------------------------
+    # PRINTER IDENTITY (serial + model via TCP)
+    # --------------------------------------------------------
+    # Diambil langsung dari printer (Link-OS getvar):
+    #   serial : ! U1 getvar "usb.device.serial_string"
+    #   model  : ! U1 getvar "device.host_identification"
+    #
+    # Gagal membaca identitas -> STOP dengan exit code 4.
+    # --------------------------------------------------------
+
+    try {
+
+        $Identity = Get-PrinterIdentity `
+            -IPAddress $PrinterIP `
+            -Port $PrinterPort `
+            -ConnectionTimeoutMs $ConnectionTimeoutMs `
+            -ResponseTimeoutMs $ResponseTimeoutMs
+    }
+    catch {
+
+        Write-Log `
+            -Message "Failed to read printer identity: $($_.Exception.Message)" `
+            -Level "ERROR"
+
+        exit 4
+    }
+
+    $Script:PrinterId = $Identity.Id
+    $Script:PrinterModel = $Identity.Model
+
+    Write-Log "Printer ID    : $Script:PrinterId"
+    Write-Log "Printer Model : $Script:PrinterModel"
 
     # --------------------------------------------------------
     # COLLECTOR INFO (KOMPUTER INI)
