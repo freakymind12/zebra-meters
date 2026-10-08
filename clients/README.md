@@ -1,6 +1,6 @@
-ebraMeter â€” Panduan Lengkap
+# ZebraMeter — Panduan Lengkap
 
-**ZebraMeter** adalah utilitas berbasis **Windows PowerShell** untuk membaca data *meter / odometer* dari printer label **Zebra** (misal: **ZT620**) melalui jaringan, lalu â€” secara opsional â€” mengirimkannya ke sistem **MES** (*Manufacturing Execution System*) melalui HTTP POST.
+**ZebraMeter** adalah utilitas berbasis **Windows PowerShell** untuk membaca data *meter / odometer* dari printer label **Zebra** (misal: **ZT620**) melalui jaringan, lalu — secara opsional — mengirimkannya ke sistem **MES** (*Manufacturing Execution System*) melalui HTTP POST.
 
 > Tool ini **tidak membutuhkan** Node.js, Python, atau library eksternal apa pun. Cukup Windows PowerShell bawaan sistem.
 
@@ -35,48 +35,48 @@ ebraMeter â€” Panduan Lengkap
 Fitur utama:
 
 - Membaca **6 meter bawaan** (dapat ditambah) dari printer Zebra lewat koneksi **TCP port 9100** (raw socket).
-- Menggunakan perintah Link-OS **`! U1 getvar "<nama_variabel>"`** â€” perintah standar printer Zebra yang mendukung Link-OS.
+- Menggunakan perintah Link-OS **`! U1 getvar "<nama_variabel>"`** — perintah standar printer Zebra yang mendukung Link-OS.
 - Semua detail jaringan, timeout, daftar meter, API, dan logging **dikendalikan lewat `config.json`** (tanpa mengubah script).
-- **Parsing otomatis** nilai numerik dari response printer (mis. `"466886 INCHES, 1185892 CENTIMETERS"` â†’ `466886`).
+- **Parsing otomatis** nilai numerik dari response printer (mis. `"466886 INCHES, 1185892 CENTIMETERS"` → `466886`).
 - **Logging** ke konsol dan ke file (append), dengan timestamp dan level (`INFO` / `ERROR`).
-- **Pengiriman ke MES API** (HTTP POST JSON, opsional dengan header `X-API-Key`) â€” *saat ini dinonaktifkan secara default, lihat [bagian 10](#10-integrasi-ke-mes-api).*
+- **Pengiriman ke MES API** (HTTP POST JSON, opsional dengan header `X-API-Key`) — *saat ini dinonaktifkan secara default, lihat [bagian 10](#10-integrasi-ke-mes-api).*
 - **Exit code terstruktur** sehingga mudah dipantau oleh sistem lain (Task Scheduler, monitoring, dsb.).
 
 ## 2. Cara Kerja (Alur Data)
 
 ```
    Zebra Printer (ZT620)
-           â”‚
-           â”‚  TCP port 9100 (raw socket)
-           â”‚  kirim: ! U1 getvar "odometer.total_label_count"
-           â”‚  terima: "36894"
-           â–¼
+           │
+           │  TCP port 9100 (raw socket)
+           │  kirim: ! U1 getvar "odometer.total_label_count"
+           │  terima: "36894"
+           ▼
    collect-zebra.ps1 (Windows PowerShell)
        1. Baca config.json (sefolder dengan script)
        2. Validasi konfigurasi (field wajib harus terisi)
        3. Test koneksi TCP ke printer
-       4. Untuk TIAP meter: buka koneksi TCP baru â†’ kirim perintah getvar â†’ baca response
+       4. Untuk TIAP meter: buka koneksi TCP baru → kirim perintah getvar → baca response
        5. Parse response menjadi angka (raw + value)
-       6. (Opsional) Kirim hasil sebagai JSON POST ke MES API   â† saat ini NONAKTIF
+       6. (Opsional) Kirim hasil sebagai JSON POST ke MES API   ← saat ini NONAKTIF
        7. Tulis semua aktivitas ke log
-           â”‚
-           â”‚  HTTP POST (application/json)
-           â–¼
-   MES API â†’ http://192.168.10.100:3000/api/printer-meter
+           │
+           │  HTTP POST (application/json)
+           ▼
+   MES API → http://192.168.10.100:3000/api/printer-meter
 ```
 
 Catatan penting tentang alur:
 
 - **Satu koneksi TCP dibuka per meter** (6 meter = 6 koneksi), bukan satu koneksi untuk semua.
-- Setiap pembacaan meter **selalu menunggu sampai `responseTimeoutMs` tercapai**, jadi total durasi sekali jalan **â‰ˆ (jumlah meter) Ã— `responseTimeoutMs`**. Dengan konfigurasi default (6 meter Ã— 2000 ms), total â‰ˆ 12â€“14 detik â€” sesuai contoh log (08:32:06 â†’ 08:32:20).
+- Setiap pembacaan meter **selalu menunggu sampai `responseTimeoutMs` tercapai**, jadi total durasi sekali jalan **≈ (jumlah meter) × `responseTimeoutMs`**. Dengan konfigurasi default (6 meter × 2000 ms), total ≈ 12–14 detik — sesuai contoh log (08:32:06 → 08:32:20).
 - Jika satu meter gagal dibaca, script **tetap melanjutkan** ke meter berikutnya (hasil meter yang gagal dicatat sebagai `null` + pesan error di log).
 
 ## 3. Persyaratan
 
 | Kebutuhan | Keterangan |
 |---|---|
-| **Sistem Operasi** | Windows dengan Windows PowerShell (disarankan PowerShell 5.1 â€” bawaan Windows 10/11 & Server 2016+) |
-| **Software tambahan** | **Tidak ada** â€” tanpa Node.js, tanpa Python, tanpa library eksternal |
+| **Sistem Operasi** | Windows dengan Windows PowerShell (disarankan PowerShell 5.1 — bawaan Windows 10/11 & Server 2016+) |
+| **Software tambahan** | **Tidak ada** — tanpa Node.js, tanpa Python, tanpa library eksternal |
 | **Jaringan** | PC harus menjangkau IP printer di **port 9100**; jika API diaktifkan, harus menjangkau juga URL API MES |
 | **Printer** | Printer Zebra yang mendukung perintah Link-OS `! U1 getvar` (contoh: **ZT620**). Pastikan printer sudah punya IP yang benar (lihat panduan jaringan di `ZEBRA-ZT620-USER-GUIDE.pdf`) |
 | **Hak akses** | Tidak perlu admin, asal menggunakan flag `-ExecutionPolicy Bypass` saat menjalankan script |
@@ -85,17 +85,17 @@ Catatan penting tentang alur:
 
 ```
 D:\Rian\PROJECT\ZebraMeter\
-â”‚
-â”œâ”€â”€ collect-zebra.ps1            # Script utama â€” seluruh logika collector
-â”œâ”€â”€ create-scheduler.ps1         # Buat Task Scheduler otomatis (interval 15 menit)
-â”œâ”€â”€ create-scheduler.bat         # Launcher double-click untuk create-scheduler.ps1 (auto-elevasi UAC)
-â”œâ”€â”€ delete-scheduler.ps1         # Hapus Task Scheduler (pembersihan saat PC dipindahtangankan)
-â”œâ”€â”€ delete-scheduler.bat         # Launcher double-click untuk delete-scheduler.ps1 (auto-elevasi UAC)
-â”œâ”€â”€ config.json                  # Semua konfigurasi (printer, api, meters, logging)
-â”œâ”€â”€ README.md                    # Dokumentasi ini
-â”œâ”€â”€ ZEBRA-ZT620-USER-GUIDE.pdf   # Panduan resmi printer Zebra ZT620 (~54 MB)
-â”‚
-â””â”€â”€ (log disimpan di lokasi dari config.logging.directory,
+│
+├── collect-zebra.ps1            # Script utama — seluruh logika collector
+├── create-scheduler.ps1         # Buat Task Scheduler otomatis (interval 15 menit)
+├── create-scheduler.bat         # Launcher double-click untuk create-scheduler.ps1 (auto-elevasi UAC)
+├── delete-scheduler.ps1         # Hapus Task Scheduler (pembersihan saat PC dipindahtangankan)
+├── delete-scheduler.bat         # Launcher double-click untuk delete-scheduler.ps1 (auto-elevasi UAC)
+├── config.json                  # Semua konfigurasi (printer, api, meters, logging)
+├── README.md                    # Dokumentasi ini
+├── ZEBRA-ZT620-USER-GUIDE.pdf   # Panduan resmi printer Zebra ZT620 (~54 MB)
+│
+└── (log disimpan di lokasi dari config.logging.directory,
      default: C:\MES\ZebraMeter\logs\zebra-meter.log)
 ```
 
@@ -105,36 +105,27 @@ D:\Rian\PROJECT\ZebraMeter\
 
 Seluruh perilaku diatur dari `config.json`. Berikut penjelasan **setiap field**:
 
-### 5.1 `printer` â€” Identitas & koneksi printer
+### 5.1 `printer` — Identitas & koneksi printer
 
 | Field | Tipe | Wajib | Contoh | Keterangan |
 |---|---|---|---|---|
-| `ip` | string | âœ… | `"192.168.41.254"` | IP address printer di jaringan. Harus bisa dijangkau dari PC ini. |
-| `port` | number | âœ… | `9100` | Port raw TCP printer. **`9100` adalah port standar** Zebra untuk menerima data/command via jaringan â€” ubah hanya jika printer Anda dikonfigurasi khusus. |
-| `connectionTimeoutMs` | number | âŒ | `5000` | Batas waktu (ms) untuk **membuka koneksi TCP** ke printer. Jika koneksi tidak terbuka dalam waktu ini â†’ dianggap printer tidak terjangkau (exit code 2). |
-| `responseTimeoutMs` | number | âŒ | `2000` | Batas waktu (ms) untuk **menunggu response** tiap perintah meter. Naikkan jika response printer lambat/truncated; turunkan (mis. `1000`) agar proses lebih cepat. |
+| `ip` | string | ✅ | `"192.168.41.254"` | IP address printer di jaringan. Harus bisa dijangkau dari PC ini. |
+| `port` | number | ✅ | `9100` | Port raw TCP printer. **`9100` adalah port standar** Zebra untuk menerima data/command via jaringan — ubah hanya jika printer Anda dikonfigurasi khusus. |
+| `connectionTimeoutMs` | number | ❌ | `5000` | Batas waktu (ms) untuk **membuka koneksi TCP** ke printer. Jika koneksi tidak terbuka dalam waktu ini → dianggap printer tidak terjangkau (exit code 2). |
+| `responseTimeoutMs` | number | ❌ | `2000` | Batas waktu (ms) untuk **menunggu response** tiap perintah meter. Naikkan jika response printer lambat/truncated; turunkan (mis. `1000`) agar proses lebih cepat. |
 
-> âš ï¸ **Field wajib saat ini adalah `ip`, `port`, dan `api.url` (lengkap di bagian 5.2).** `id` dan `model` **tidak lagi dikonfigurasi manual** â€” script akan membaca langsung dari printer (serial number & model) via Link-OS `getvar` sebelum koneksi ke meter dimulai. Jika pembacaan identitas gagal, script berhenti dengan **exit code 4**.
+> ⚠️ **Field wajib saat ini adalah `ip`, `port`, dan `api.url` (lengkap di bagian 5.2).** `id` dan `model` **tidak lagi dikonfigurasi manual** — script akan membaca langsung dari printer (serial number & model) via Link-OS `getvar` sebelum koneksi ke meter dimulai. Jika pembacaan identitas gagal, script berhenti dengan **exit code 4**.
 
-### 5.2 `api` â€” Endpoint MES API
-
-| Field | Tipe | Contoh | Keterangan |
-|---|---|---|---|
-| `url` | string | `"http://192.168.10.100:3000/api/printer-meter"` | Endpoint penerima data meter. **Wajib diisi** (dicek saat validasi) meski pengiriman API sedang nonaktif. |
-| `method` | string | `"POST"` | Metode HTTP yang dipakai `Invoke-RestMethod`. |
-| `timeoutSeconds` | number | `10` | Batas waktu (detik) request HTTP ke API. |
-| `apiKey` | string | `""` | API key opsional. **Jika kosong**, header tidak dikirim. **Jika diisi**, script mengirim header tambahan `X-API-Key: <nilai>` â€” sesuaikan dengan requirement API Anda. |
-
-### 5.2 `api` â€” Endpoint MES API
+### 5.2 `api` — Endpoint MES API
 
 | Field | Tipe | Contoh | Keterangan |
 |---|---|---|---|
 | `url` | string | `"http://192.168.10.100:3000/api/printer-meter"` | Endpoint penerima data meter. **Wajib diisi** (dicek saat validasi) meski pengiriman API sedang nonaktif. |
 | `method` | string | `"POST"` | Metode HTTP yang dipakai `Invoke-RestMethod`. |
 | `timeoutSeconds` | number | `10` | Batas waktu (detik) request HTTP ke API. |
-| `apiKey` | string | `""` | API key opsional. **Jika kosong**, header tidak dikirim. **Jika diisi**, script mengirim header tambahan `X-API-Key: <nilai>` â€” sesuaikan dengan requirement API Anda. |
+| `apiKey` | string | `""` | API key opsional. **Jika kosong**, header tidak dikirim. **Jika diisi**, script mengirim header tambahan `X-API-Key: <nilai>` — sesuaikan dengan requirement API Anda. |
 
-### 5.3 `meters` â€” Daftar meter yang dibaca
+### 5.3 `meters` — Daftar meter yang dibaca
 
 Array dari objek `{ name, command }`:
 
@@ -143,7 +134,7 @@ Array dari objek `{ name, command }`:
 | `name` | Nama meter. Dipakai sebagai **key** di log dan di payload API (`meters` & `rawMeters`). Gunakan `camelCase`. |
 | `command` | Perintah Link-OS yang dikirim ke printer, format: `! U1 getvar "<variabel>"` |
 
-Contoh â€” menambah 1 meter baru (mis. versi firmware):
+Contoh — menambah 1 meter baru (mis. versi firmware):
 
 ```json
 {
@@ -154,14 +145,14 @@ Contoh â€” menambah 1 meter baru (mis. versi firmware):
 
 > Daftar lengkap variabel `getvar` ada di dokumentasi Link-OS Zebra / `ZEBRA-ZT620-USER-GUIDE.pdf`.
 
-### 5.4 `logging` â€” File log
+### 5.4 `logging` — File log
 
 | Field | Tipe | Contoh | Keterangan |
 |---|---|---|---|
 | `enabled` | boolean | `true` | `true` = tulis log ke file **dan** konsol; `false` = hanya konsol. |
 | `directory` | string | `"C:\\MES\\ZebraMeter\\logs"` | Folder penyimpanan log. **Dibuat otomatis** jika belum ada. *Perhatikan escape backslash (`\\`) di JSON.* |
 | `fileName` | string | `"zebra-meter.log"` | Nama file log. Setiap run **di-append** (tidak menimpa isi lama). |
-| `keepDays` | number | `30` | **Saat ini RESERVED / belum diimplementasikan oleh script** â€” tidak ada proses rotasi/pembersihan otomatis berdasarkan field ini. Pantau ukuran file log secara manual bila diperlukan. |
+| `keepDays` | number | `30` | **Saat ini RESERVED / belum diimplementasikan oleh script** — tidak ada proses rotasi/pembersihan otomatis berdasarkan field ini. Pantau ukuran file log secara manual bila diperlukan. |
 
 ### 5.5 Contoh `config.json` lengkap
 
@@ -236,7 +227,7 @@ Keterangan flag:
 
 | Flag | Fungsi |
 |---|---|
-| `-NoProfile` | Tidak memuat PowerShell profile (hasil konsisten di semua mesin â€” **disarankan untuk otomasi**) |
+| `-NoProfile` | Tidak memuat PowerShell profile (hasil konsisten di semua mesin — **disarankan untuk otomasi**) |
 | `-ExecutionPolicy Bypass` | Melewati ExecutionPolicy agar script bisa jalan tanpa perlu signing/unblocking |
 | `-File ".\collect-zebra.ps1"` | Menjalankan script file |
 
@@ -278,33 +269,33 @@ Keterangan flag:
 ### 6.4 Cara membaca output
 
 - Format baris: `[timestamp] [LEVEL] pesan`.
-- `Reading meter: <nama>` â†’ script sedang mengirim perintah getvar untuk meter tersebut.
-- `Collector Hostname : ...` / `Collector IP : ...` â†’ identitas komputer (PC collector) yang menjalankan pengambilan. **IP** = alamat lokal yang benar-benar dipakai menjangkau printer (akurat untuk PC multi-NIC) â€” berguna untuk tahu node mana yang mengirim data ke MES.
-- `<nama> = <response mentah dari printer>` â†’ **raw value** apa adanya.
-- `Meter collection completed successfully.` â†’ semua proses selesai tanpa error fatal (exit code 0).
-- **Response dua-satuan** seperti `"466886 INCHES, 1185892 CENTIMETERS"`: parser mengambil **angka pertama** â†’ nilai numerik yang dipakai = **`466886` (INCHES)**.
+- `Reading meter: <nama>` → script sedang mengirim perintah getvar untuk meter tersebut.
+- `Collector Hostname : ...` / `Collector IP : ...` → identitas komputer (PC collector) yang menjalankan pengambilan. **IP** = alamat lokal yang benar-benar dipakai menjangkau printer (akurat untuk PC multi-NIC) — berguna untuk tahu node mana yang mengirim data ke MES.
+- `<nama> = <response mentah dari printer>` → **raw value** apa adanya.
+- `Meter collection completed successfully.` → semua proses selesai tanpa error fatal (exit code 0).
+- **Response dua-satuan** seperti `"466886 INCHES, 1185892 CENTIMETERS"`: parser mengambil **angka pertama** → nilai numerik yang dipakai = **`466886` (INCHES)**.
 - Setelah selesai, cek `$LASTEXITCODE` (atau `echo $LASTEXITCODE` di PowerShell) untuk memastikan exit code = `0`.
 
 ## 7. Kode Keluaran (Exit Code)
 
 | Exit Code | Arti | Penyebab / Solusi |
 |---|---|---|
-| `0` | âœ… Sukses | Meter terbaca semua; proses selesai normal. |
-| `1` | âŒ Konfigurasi bermasalah | `config.json` tidak ditemukan, JSON gagal di-parse, atau ada field wajib yang kosong. Periksa [bagian 5](#5-konfigurasi-configjson). |
-| `2` | âŒ Printer tidak terjangkau | Koneksi TCP timeout / gagal. Cek IP, port, jaringan, dan firewall (lihat [bagian 6.1](#61-cek-koneksi-printer-dulu-disarankan)). |
-| `3` | âŒ Koleksi sukses, pengiriman API gagal | Hanya muncul **jika fitur API diaktifkan** ([bagian 10](#10-integrasi-ke-mes-api)). Cek URL API, server MES, dan `apiKey`. |
-| `4` | âŒ Gagal membaca identitas printer | Serial number / model dari printer gagal dibaca (mis. variabel `getvar` tidak ada, printer tidak merespons). Cek koneksi & nama variabel getvar. |
-| `99` | âŒ Error tak terduga | Ada exception yang tidak tertangani â€” baca pesan error di log. |
+| `0` | ✅ Sukses | Meter terbaca semua; proses selesai normal. |
+| `1` | ❌ Konfigurasi bermasalah | `config.json` tidak ditemukan, JSON gagal di-parse, atau ada field wajib yang kosong. Periksa [bagian 5](#5-konfigurasi-configjson). |
+| `2` | ❌ Printer tidak terjangkau | Koneksi TCP timeout / gagal. Cek IP, port, jaringan, dan firewall (lihat [bagian 6.1](#61-cek-koneksi-printer-dulu-disarankan)). |
+| `3` | ❌ Koleksi sukses, pengiriman API gagal | Hanya muncul **jika fitur API diaktifkan** ([bagian 10](#10-integrasi-ke-mes-api)). Cek URL API, server MES, dan `apiKey`. |
+| `4` | ❌ Gagal membaca identitas printer | Serial number / model dari printer gagal dibaca (mis. variabel `getvar` tidak ada, printer tidak merespons). Cek koneksi & nama variabel getvar. |
+| `99` | ❌ Error tak terduga | Ada exception yang tidak tertangani — baca pesan error di log. |
 
-> Exit code ini bisa dipakai oleh Task Scheduler / monitoring: mis. kirim alert hanya jika exit code â‰  0.
+> Exit code ini bisa dipakai oleh Task Scheduler / monitoring: mis. kirim alert hanya jika exit code ≠ 0.
 
 ## 8. Log
 
-- **Lokasi:** `logging.directory` + `logging.fileName` â†’ default `C:\MES\ZebraMeter\logs\zebra-meter.log`.
+- **Lokasi:** `logging.directory` + `logging.fileName` → default `C:\MES\ZebraMeter\logs\zebra-meter.log`.
 - Folder dibuat **otomatis** jika belum ada.
-- Log **di-append** â€” riwayat semua run tetap tersimpan (format sama dengan output konsol).
+- Log **di-append** — riwayat semua run tetap tersimpan (format sama dengan output konsol).
 - Menonaktifkan tulis ke file: set `"logging": { "enabled": false }` (output tetap tampil di konsol).
-- **Rotasi/pembersihan otomatis berdasarkan `keepDays` belum diimplementasikan** â€” bersihkan manual bila file sudah besar.
+- **Rotasi/pembersihan otomatis berdasarkan `keepDays` belum diimplementasikan** — bersihkan manual bila file sudah besar.
 
 Contoh baris log ERROR:
 
@@ -329,14 +320,14 @@ Contoh baris log ERROR:
 Keterangan pembacaan:
 
 - **Raw value** = string apa adanya dari printer (termasuk satuan).
-- **Parsed value** = angka pertama yang diekstrak parser â†’ untuk response `"466886 INCHES, ..."` hasilnya **`466886`** (satuan pertama = INCHES).
+- **Parsed value** = angka pertama yang diekstrak parser → untuk response `"466886 INCHES, ..."` hasilnya **`466886`** (satuan pertama = INCHES).
 - Satuan mengikuti konfigurasi printer; untuk angka murni seperti `totalLabelCount`, hasilnya sudah berupa count.
 
 ### 9.1 Menambah / mengubah / menghapus meter
 
-Semua dilakukan dari `config.json` â€” **tidak perlu mengubah script**.
+Semua dilakukan dari `config.json` — **tidak perlu mengubah script**.
 
-**Tambah meter baru** â€” tambahkan objek baru ke array `meters`:
+**Tambah meter baru** — tambahkan objek baru ke array `meters`:
 
 ```json
 "meters": [
@@ -345,9 +336,9 @@ Semua dilakukan dari `config.json` â€” **tidak perlu mengubah script**.
 ]
 ```
 
-**Hapus meter** â€” hapus objeknya dari array.
+**Hapus meter** — hapus objeknya dari array.
 
-**Ubah nama** â€” ubah field `name` (yang tampil di log & jadi key payload API). Field `command` tetap sesuai variabel printer.
+**Ubah nama** — ubah field `name` (yang tampil di log & jadi key payload API). Field `command` tetap sesuai variabel printer.
 
 Langkah verifikasi setelah mengubah `meters`:
 
@@ -361,7 +352,7 @@ Langkah verifikasi setelah mengubah `meters`:
 
 ### 10.1 Status saat ini: NONAKTIF (dikomentari)
 
-Pada bagian **MAIN** script (`collect-zebra.ps1`, Â± baris 565â€“575), pemanggilan fungsi `Send-ToApi` **sedang dikomentari**:
+Pada bagian **MAIN** script (`collect-zebra.ps1`, ± baris 565–575), pemanggilan fungsi `Send-ToApi` **sedang dikomentari**:
 
 ```powershell
     # $ApiOK = Send-ToApi `
@@ -377,14 +368,14 @@ Pada bagian **MAIN** script (`collect-zebra.ps1`, Â± baris 565â€“575), pe
     # }
 ```
 
-Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** â€” data **belum dikirim** ke MES API.
+Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** — data **belum dikirim** ke MES API.
 
-> ðŸ“Œ Field `collectorHostname` & `collectorIp` **sudah disiapkan** di dalam payload `Send-ToApi` (lihat [bagian 10.3](#103-format-payload-yang-dikirim)) â€” akan ikut terkirim otomatis begitu blok di atas diaktifkan.
+> 📌 Field `collectorHostname` & `collectorIp` **sudah disiapkan** di dalam payload `Send-ToApi` (lihat [bagian 10.3](#103-format-payload-yang-dikirim)) — akan ikut terkirim otomatis begitu blok di atas diaktifkan.
 
 ### 10.2 Cara mengaktifkan pengiriman ke API
 
 1. Buka `collect-zebra.ps1` dengan editor teks (VS Code, Notepad, dsb.).
-2. Cari blok kode di atas (Â± baris 565â€“575, tepat sebelum `Write-Log "Meter collection completed successfully."`).
+2. Cari blok kode di atas (± baris 565–575, tepat sebelum `Write-Log "Meter collection completed successfully."`).
 3. **Hapus prefix `# ` (koma-tik + spasi)** pada setiap baris sehingga menjadi:
 
 ```powershell
@@ -401,7 +392,7 @@ Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** â€”
     }
 ```
 
-4. Pastikan `config.json` â†’ `api.url` (dan `method`, `timeoutSeconds`, opsional `apiKey`) sudah benar.
+4. Pastikan `config.json` → `api.url` (dan `method`, `timeoutSeconds`, opsional `apiKey`) sudah benar.
 5. Simpan, lalu jalankan ulang script. Log akan menampilkan `"Sending meter data to API:"` diikuti payload JSON, lalu `"API request successful."` atau `"API request failed: ..."`.
 
 ### 10.3 Format payload yang dikirim
@@ -446,12 +437,12 @@ Keterangan field:
 | `model` | Model printer (dibaca otomatis via getvar `device.host_identification`). **Wajib tersedia** - jika gagal dibaca, script berhenti dengan exit code 4 |
 | `ipAddress` | Dari `printer.ip` |
 | `measuredAt` | Waktu pengukuran, format ISO 8601 |
-| `collectorHostname` | Hostname komputer (PC collector) yang menjalankan script â€” via `MachineName` |
+| `collectorHostname` | Hostname komputer (PC collector) yang menjalankan script — via `MachineName` |
 | `collectorIp` | IP lokal komputer collector yang dipakai menjangkau printer (diambil dari socket koneksi; fallback: IPv4 NIC aktif pertama) |
 | `meters` | Hanya **nilai numerik hasil parse** per meter |
 | `rawMeters` | Nilai **mentah** + nilai parse + `error` (jika pembacaan gagal) per meter |
 
-> Catatan: urutan key JSON bisa berbeda-beda (PowerShell hashtable tidak menjamin urutan) â€” tidak mempengaruhi fungsi API.
+> Catatan: urutan key JSON bisa berbeda-beda (PowerShell hashtable tidak menjamin urutan) — tidak mempengaruhi fungsi API.
 
 ### 10.4 Menguji endpoint API secara terpisah
 
@@ -476,27 +467,27 @@ Agar meter dibaca berkala **setiap 15 menit** tanpa menjalankan manual, project 
 | Script | Fungsi |
 |---|---|
 | `create-scheduler.ps1` | Membuat task scheduler (interval 15 menit) |
-| `delete-scheduler.ps1` | Menghapus task â€” untuk pembersihan saat PC tidak dipakai lagi sebagai PC mesin printer |
+| `delete-scheduler.ps1` | Menghapus task — untuk pembersihan saat PC tidak dipakai lagi sebagai PC mesin printer |
 
-> âš ï¸ Kedua script **harus dijalankan sebagai Administrator** (klik kanan â†’ *Run as administrator*), karena task dibuat dengan akun **SYSTEM**.
+> ⚠️ Kedua script **harus dijalankan sebagai Administrator** (klik kanan → *Run as administrator*), karena task dibuat dengan akun **SYSTEM**.
 
-**Cara termudah â€” double-click file `.bat` (tanpa perlu membuka PowerShell):**
+**Cara termudah — double-click file `.bat` (tanpa perlu membuka PowerShell):**
 
 | File `.bat` | Fungsi |
 |---|---|
-| `create-scheduler.bat` | Double-click â†’ buat task scheduler (interval 15 menit) |
-| `delete-scheduler.bat` | Double-click â†’ hapus task scheduler |
+| `create-scheduler.bat` | Double-click → buat task scheduler (interval 15 menit) |
+| `delete-scheduler.bat` | Double-click → hapus task scheduler |
 
 Cara kerja launcher `.bat`:
 
 1. Double-click file `.bat`; jika muncul dialog UAC, klik **Yes**.
-2. Launcher mengecek apakah sudah berjalan sebagai Administrator. Jika **belum**, launcher otomatis **membuka ulang dirinya sendiri dengan hak Administrator** (elevasi UAC) â€” tidak perlu klik kanan â†’ *Run as administrator* secara manual.
+2. Launcher mengecek apakah sudah berjalan sebagai Administrator. Jika **belum**, launcher otomatis **membuka ulang dirinya sendiri dengan hak Administrator** (elevasi UAC) — tidak perlu klik kanan → *Run as administrator* secara manual.
 3. Launcher otomatis `cd` ke folder tempat file `.bat` berada (sehingga `config.json` selalu ditemukan), lalu memanggil script PowerShell dengan `-NoProfile -ExecutionPolicy Bypass`.
 4. Jendela tetap terbuka sampai Anda menekan tombol apa pun, supaya output dan exit code bisa dibaca.
 
-> Launcher `.bat` menjalankan script `.ps1` yang **sama persis** dengan cara manual pada 11.1 dan 11.2 â€” hasilnya identik. Jika UAC dibatalkan, launcher keluar dengan **exit code 1**.
+> Launcher `.bat` menjalankan script `.ps1` yang **sama persis** dengan cara manual pada 11.1 dan 11.2 — hasilnya identik. Jika UAC dibatalkan, launcher keluar dengan **exit code 1**.
 
-### 11.1 Membuat task â€” `create-scheduler.ps1` (disarankan)
+### 11.1 Membuat task — `create-scheduler.ps1` (disarankan)
 
 ```powershell
 cd D:\Rian\PROJECT\ZebraMeter
@@ -508,11 +499,11 @@ Konfigurasi yang dibuat otomatis:
 | Item | Nilai |
 |---|---|
 | Task name | `ZebraMeter Collector` |
-| Interval | **Setiap 15 menit** â€” run pertama diselaraskan ke kelipatan :00 / :15 / :30 / :45 |
+| Interval | **Setiap 15 menit** — run pertama diselaraskan ke kelipatan :00 / :15 / :30 / :45 |
 | Action | `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "...\collect-zebra.ps1"` |
-| Run as | **SYSTEM** (Highest) â€” tetap jalan walau tidak ada user login |
-| Settings | StartWhenAvailable Â· boleh di baterai Â· tidak dieksekusi dobel jika masih jalan Â· limit 10 menit |
-| Idempoten | Task sudah ada â†’ dibuat ulang (overwrite otomatis) |
+| Run as | **SYSTEM** (Highest) — tetap jalan walau tidak ada user login |
+| Settings | StartWhenAvailable · boleh di baterai · tidak dieksekusi dobel jika masih jalan · limit 10 menit |
+| Idempoten | Task sudah ada → dibuat ulang (overwrite otomatis) |
 
 Contoh output (diambil dari run nyata):
 
@@ -526,11 +517,11 @@ Contoh output (diambil dari run nyata):
 [2026-10-06 10:24:59] [INFO] Run As       : SYSTEM (Highest privileges)
 ```
 
-Exit code: `0` sukses Â· `1` bukan admin Â· `2` `collect-zebra.ps1` tidak ditemukan Â· `99` error tak terduga.
+Exit code: `0` sukses · `1` bukan admin · `2` `collect-zebra.ps1` tidak ditemukan · `99` error tak terduga.
 
-> **Catatan akses:** task dengan principal SYSTEM **tidak terbaca oleh akun biasa** â€” `Get-ScheduledTask` / `schtasks` dari token non-admin akan mengembalikan *Access is denied* (bukan "tidak ada"). Untuk melihat/mengelola task, buka *Task Scheduler* via Run as administrator.
+> **Catatan akses:** task dengan principal SYSTEM **tidak terbaca oleh akun biasa** — `Get-ScheduledTask` / `schtasks` dari token non-admin akan mengembalikan *Access is denied* (bukan "tidak ada"). Untuk melihat/mengelola task, buka *Task Scheduler* via Run as administrator.
 
-### 11.2 Menghapus task â€” `delete-scheduler.ps1`
+### 11.2 Menghapus task — `delete-scheduler.ps1`
 
 Untuk pembersihan ketika PC ini sudah tidak dipakai sebagai PC mesin printer:
 
@@ -538,13 +529,13 @@ Untuk pembersihan ketika PC ini sudah tidak dipakai sebagai PC mesin printer:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\delete-scheduler.ps1"
 ```
 
-- **Wajib Administrator** â€” cek admin dijalankan paling awal supaya tidak ada laporan "tidak ada" yang salah (*false negative*) saat token biasa tidak bisa membaca task.
-- Task ada â†’ dihentikan dulu (jika sedang jalan) â†’ dihapus â†’ diverifikasi (`Task deleted successfully`).
-- Task tidak ada â†’ `Task not found. Nothing to delete` (**exit 0**) â€” aman dijalankan berulang.
+- **Wajib Administrator** — cek admin dijalankan paling awal supaya tidak ada laporan "tidak ada" yang salah (*false negative*) saat token biasa tidak bisa membaca task.
+- Task ada → dihentikan dulu (jika sedang jalan) → dihapus → diverifikasi (`Task deleted successfully`).
+- Task tidak ada → `Task not found. Nothing to delete` (**exit 0**) — aman dijalankan berulang.
 
-Exit code: `0` sukses / tidak ada task Â· `1` bukan admin Â· `3` task masih ada setelah percobaan hapus Â· `99` error tak terduga.
+Exit code: `0` sukses / tidak ada task · `1` bukan admin · `3` task masih ada setelah percobaan hapus · `99` error tak terduga.
 
-### 11.3 Opsi manual A â€” Wrapper `.cmd` + Task Scheduler
+### 11.3 Opsi manual A — Wrapper `.cmd` + Task Scheduler
 
 Buat file `run-zebra-meter.cmd` di folder project:
 
@@ -556,14 +547,14 @@ exit /b %ERRORLEVEL%
 
 Lalu di **Task Scheduler**:
 
-1. Buka *Task Scheduler* â†’ **Create Basic Taskâ€¦**
-2. **Name:** `ZebraMeter Collector` â†’ Next.
-3. **Trigger:** pilih *Daily* / *Weekly* / *When the computer starts* sesuai kebutuhan â†’ Next.
-4. **Action:** *Start a program* â†’ Next.
+1. Buka *Task Scheduler* → **Create Basic Task…**
+2. **Name:** `ZebraMeter Collector` → Next.
+3. **Trigger:** pilih *Daily* / *Weekly* / *When the computer starts* sesuai kebutuhan → Next.
+4. **Action:** *Start a program* → Next.
 5. **Program/script:** `D:\Rian\PROJECT\ZebraMeter\run-zebra-meter.cmd`
-6. *(Opsional)* tab **Settings**: centang *Run task as soon as possible after a scheduled start is missed*, dan *If the task fails, restart everyâ€¦*
+6. *(Opsional)* tab **Settings**: centang *Run task as soon as possible after a scheduled start is missed*, dan *If the task fails, restart every…*
 
-### 11.4 Opsi manual B â€” Langsung tanpa wrapper
+### 11.4 Opsi manual B — Langsung tanpa wrapper
 
 Pada langkah 5 di atas, isi:
 
@@ -578,7 +569,7 @@ Pada langkah 5 di atas, isi:
 - **Akses jaringan:** dengan script `create-scheduler.ps1`, task berjalan sebagai **SYSTEM** dan terbukti bisa menjangkau printer (run E2E tervalidasi di PC ini). Untuk setup manual, pastikan akun yang dipilih punya akses jaringan ke printer (dan ke MES API bila diaktifkan).
 - **Cek exit code** untuk monitoring: `0` = sukses, selain itu = gagal (lihat [bagian 7](#7-kode-keluaran-exit-code)).
 - Set `logging.enabled = true` agar semua run tercatat di file log untuk audit.
-- Interval 15 menit sangat aman â€” satu run hanya butuh â‰ˆ 12â€“14 detik dengan konfigurasi default.
+- Interval 15 menit sangat aman — satu run hanya butuh ≈ 12–14 detik dengan konfigurasi default.
 
 ## 12. Troubleshooting
 
@@ -588,17 +579,17 @@ Pada langkah 5 di atas, isi:
 |---|---|---|
 | `ERROR: config.json not found: ...` (exit 1) | File `config.json` tidak ada / tidak sefolder dengan script | Pastikan `config.json` ada di folder yang sama dengan `collect-zebra.ps1` |
 | `ERROR: Failed to parse config.json` (exit 1) | JSON tidak valid (trailing comma, komentar, quote salah) | Validasi: `Get-Content .\config.json -Raw \| ConvertFrom-Json` |
-| `Configuration contains empty required value.` (exit 1) | `printer.ip` / `printer.port` / `api.url` kosong | Isi semua field wajib â€” termasuk `api.url` meski API nonaktif |
+| `Configuration contains empty required value.` (exit 1) | `printer.ip` / `printer.port` / `api.url` kosong | Isi semua field wajib — termasuk `api.url` meski API nonaktif |
 | `Connection timeout to printer ...` / `Printer is unreachable.` (exit 2) | IP salah, printer mati, port salah, kabel/Jaringan putus, firewall blokir 9100 | `Test-NetConnection <ip> -Port 9100`; cek panel printer & firewall |
 | `Failed to read <meter> : ...` (per meter, proses tetap lanjut) | Nama variabel `getvar` tidak didukung firmware, atau printer lambat | Cek nama variabel; naikkan `printer.responseTimeoutMs` |
 | `Failed to read printer identity: ...` (exit 4) | Serial number / model dari printer gagal dibaca (variabel `getvar` tidak ada, printer tidak merespons) | Cek koneksi & nama variabel getvar |
-| Proses terasa lama (~14 dtk) | Wajar â€” tiap meter menunggu hingga `responseTimeoutMs` | Turunkan `responseTimeoutMs` jika printer merespons cepat |
+| Proses terasa lama (~14 dtk) | Wajar — tiap meter menunggu hingga `responseTimeoutMs` | Turunkan `responseTimeoutMs` jika printer merespons cepat |
 | `API request failed: ...` (exit 3) | Server MES mati, URL salah, API key salah | Test endpoint manual ([bagian 10.4](#104-menguji-endpoint-api-secara-terpisah)); cek log detail |
 | Log file tidak muncul | Folder tidak bisa ditulis / `logging.enabled = false` | Cek permission `C:\MES\ZebraMeter\logs`; set `enabled: true` |
 | `... cannot be loaded because running scripts is disabled...` | Dijalankan tanpa `-ExecutionPolicy Bypass` | Gunakan perintah lengkap di [bagian 6.2](#62-menjalankan-script-perintah-utama) |
-| Output berbeda dengan contoh (model/IP beda) | Config memang berbeda | Normal â€” bandingkan dengan `printer` di `config.json` Anda |
+| Output berbeda dengan contoh (model/IP beda) | Config memang berbeda | Normal — bandingkan dengan `printer` di `config.json` Anda |
 
-### 12.2 Debug manual â€” query SATU meter langsung dari PowerShell
+### 12.2 Debug manual — query SATU meter langsung dari PowerShell
 
 Berguna untuk menguji nama variabel/koneksi tanpa menjalankan script penuh:
 
@@ -629,32 +620,32 @@ Jika snippet di atas mengembalikan nilai (mis. `"36894"`), koneksi & variabel be
 
 ### 12.3 Checklist cepat saat gagal
 
-1. `Test-NetConnection <ip-printer> -Port 9100` â†’ `TcpTestSucceeded` harus `True`.
+1. `Test-NetConnection <ip-printer> -Port 9100` → `TcpTestSucceeded` harus `True`.
 2. Validasi `config.json` (`ConvertFrom-Json`).
-3. Baca **file log** (`C:\MES\ZebraMeter\logs\zebra-meter.log`) â€” pesan `[ERROR]` menjelaskan titik gagal.
-4. Cek **exit code** (`$LASTEXITCODE`) â†’ cocokkan dengan [bagian 7](#7-kode-keluaran-exit-code).
-5. Masih gagal â†’ jalankan debug manual [bagian 12.2](#122-debug-manual--query-satu-meter-langsung-dari-powershell).
+3. Baca **file log** (`C:\MES\ZebraMeter\logs\zebra-meter.log`) — pesan `[ERROR]` menjelaskan titik gagal.
+4. Cek **exit code** (`$LASTEXITCODE`) → cocokkan dengan [bagian 7](#7-kode-keluaran-exit-code).
+5. Masih gagal → jalankan debug manual [bagian 12.2](#122-debug-manual--query-satu-meter-langsung-dari-powershell).
 
 ## 13. Batasan & Catatan Penting
 
-1. **Pengiriman ke MES API dinonaktifkan secara default** (blok `Send-ToApi` dikomentari) â€” saat ini script hanya membaca & mencatat log. Cara mengaktifkan: [bagian 10](#10-integrasi-ke-mes-api).
-2. **`logging.keepDays` belum diimplementasikan** â€” tidak ada rotasi/pembersihan otomatis log; file log akan terus bertambah (append).
+1. **Pengiriman ke MES API dinonaktifkan secara default** (blok `Send-ToApi` dikomentari) — saat ini script hanya membaca & mencatat log. Cara mengaktifkan: [bagian 10](#10-integrasi-ke-mes-api).
+2. **`logging.keepDays` belum diimplementasikan** — tidak ada rotasi/pembersihan otomatis log; file log akan terus bertambah (append).
 3. **`api.url` tetap wajib** meski API nonaktif, karena ikut divalidasi `Test-Configuration`.
 4. **Satu `config.json` = satu printer.** Untuk banyak printer, salin folder project dan sesuaikan IP/ID tiap instance.
-5. **Parser mengambil angka pertama** dari response â€” untuk response dua-satuan hasilnya selalu satuan pertama (INCHES pada contoh default).
-6. **Tidak ada mekanisme retry** â€” jika koneksi/API gagal, script langsung berhenti dengan exit code terkait.
-7. **Satu koneksi TCP per meter** (bukan koneksi keep-alive) â€” durasi total â‰ˆ jumlah meter Ã— `responseTimeoutMs`.
-8. **Tidak ada mode dry-run** â€” setiap run akan benar-benar membaca printer (membaca odometer bersifat non-destruktif / aman).
+5. **Parser mengambil angka pertama** dari response — untuk response dua-satuan hasilnya selalu satuan pertama (INCHES pada contoh default).
+6. **Tidak ada mekanisme retry** — jika koneksi/API gagal, script langsung berhenti dengan exit code terkait.
+7. **Satu koneksi TCP per meter** (bukan koneksi keep-alive) — durasi total ≈ jumlah meter × `responseTimeoutMs`.
+8. **Tidak ada mode dry-run** — setiap run akan benar-benar membaca printer (membaca odometer bersifat non-destruktif / aman).
 9. Data **raw + parsed** disimpan berdampingan di payload (`rawMeters` vs `meters`), sehingga MES bisa memakai nilai numerik sekaligus audit nilai asli.
 
 ## 14. Referensi
 
 | Sumber | Keterangan |
 |---|---|
-| `ZEBRA-ZT620-USER-GUIDE.pdf` | Panduan resmi printer Zebra ZT620 (setup, jaringan, perawatan) â€” ada di folder project |
+| `ZEBRA-ZT620-USER-GUIDE.pdf` | Panduan resmi printer Zebra ZT620 (setup, jaringan, perawatan) — ada di folder project |
 | Dokumentasi **Zebra Link-OS** | Referensi perintah `! U1 getvar "<variable>"` dan daftar variabel printer |
 | Dokumentasi **Zebra Communication & Print** | Protokol port 9100 (raw TCP) Zebra |
-| `collect-zebra.ps1` | Sumber kebenaran perilaku script â€” komentar di dalam script menjelaskan tiap fungsi (`Write-Log`, `Test-Configuration`, `Test-PrinterConnection`, `Get-ZebraValue`, `Parse-NumericValue`, `Collect-Meters`, `Send-ToApi`) |
+| `collect-zebra.ps1` | Sumber kebenaran perilaku script — komentar di dalam script menjelaskan tiap fungsi (`Write-Log`, `Test-Configuration`, `Test-PrinterConnection`, `Get-ZebraValue`, `Parse-NumericValue`, `Collect-Meters`, `Send-ToApi`) |
 
 ---
 
