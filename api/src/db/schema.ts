@@ -80,6 +80,11 @@ export const meterReadings = mysqlTable(
     collectorHostname: varchar('collector_hostname', { length: 255 }),
     collectorIp: varchar('collector_ip', { length: 45 }),
 
+    // Serial printhead saat ini — dibaca dari printer via Link-OS getvar
+    // (! U1 getvar "device.serial_numbers.printhead").
+    // null = tidak tersedia / gagal dibaca / baris lama (sebelum kolom ini ada).
+    printheadId: varchar('printhead_id', { length: 100 }),
+
     // --- split value per meter (nullable: null = gagal dibaca / tidak ada) ---
     totalLabelCount: double('total_label_count'),
     totalPrintLength: double('total_print_length'),

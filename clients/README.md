@@ -245,6 +245,8 @@ Keterangan flag:
 [2026-10-06 08:32:06] [INFO] Reading printer model...
 [2026-10-06 08:32:06] [INFO] Printer ID    : DJ123456789
 [2026-10-06 08:32:06] [INFO] Printer Model : ZT620
+[2026-10-06 08:32:06] [INFO] Reading printhead serial number...
+[2026-10-06 08:32:06] [INFO] Printhead ID   : PH1234567890
 [2026-10-06 08:32:06] [INFO] Testing connection to 192.168.41.254:9100
 [2026-10-06 08:32:06] [INFO] Printer connection successful.
 [2026-10-06 08:32:06] [INFO] Collector Hostname : DIID-310
@@ -410,6 +412,7 @@ Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** — data
   "measuredAt": "2026-10-06T08:32:20.0000000+07:00",
   "collectorHostname": "DIID-310",
   "collectorIp": "192.168.41.250",
+  "printheadId": "PH1234567890",
   "meters": {
     "totalLabelCount": 36894,
     "totalPrintLength": 466886,
@@ -439,6 +442,7 @@ Keterangan field:
 | `measuredAt` | Waktu pengukuran, format ISO 8601 |
 | `collectorHostname` | Hostname komputer (PC collector) yang menjalankan script — via `MachineName` |
 | `collectorIp` | IP lokal komputer collector yang dipakai menjangkau printer (diambil dari socket koneksi; fallback: IPv4 NIC aktif pertama) |
+| `printheadId` | **Serial number printhead** (dibaca otomatis via getvar `device.serial_numbers.printhead`; `null` jika tidak tersedia / gagal dibaca) |
 | `meters` | Hanya **nilai numerik hasil parse** per meter |
 | `rawMeters` | Nilai **mentah** + nilai parse + `error` (jika pembacaan gagal) per meter |
 

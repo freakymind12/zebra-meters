@@ -60,6 +60,10 @@ $Script:CollectorIp = $null
 $Script:PrinterId = $null
 $Script:PrinterModel = $null
 
+# Serial printhead saat ini (diisi otomatis dari printer via TCP;
+# null = tidak tersedia / gagal dibaca, lihat Get-PrintheadSerial).
+$Script:PrintheadId = $null
+
 # ------------------------------------------------------------
 # FUNCTIONS
 # ------------------------------------------------------------
@@ -404,6 +408,49 @@ function Get-PrinterIdentity {
 }
 
 
+function Get-PrintheadSerial {
+
+    # --------------------------------------------------------
+    # AMBIL SERIAL NUMBER PRINTHEAD VIA TCP (Link-OS getvar)
+    # --------------------------------------------------------
+    # Printhead : ! U1 getvar "device.serial_numbers.printhead"
+    #             -> "PH1234567890"
+    #
+    # Printer membalas "?" jika variabel tidak dikenal /
+    # tidak didukung firmware -> dianggap tidak tersedia.
+    #
+    # Pembacaan ini NON-FATAL (lihat MAIN): gagal membaca
+    # tidak menghentikan proses, hanya menghasilkan $null.
+    # --------------------------------------------------------
+
+    param (
+        [string]$IPAddress,
+        [int]$Port,
+        [int]$ConnectionTimeoutMs,
+        [int]$ResponseTimeoutMs
+    )
+
+    $RawPrinthead = Get-ZebraValue `
+        -IPAddress $IPAddress `
+        -Port $Port `
+        -Command '! U1 getvar "device.serial_numbers.printhead"' `
+        -ConnectionTimeoutMs $ConnectionTimeoutMs `
+        -ResponseTimeoutMs $ResponseTimeoutMs
+
+    $PrintheadSerial = $RawPrinthead.Trim().Trim('"').Trim()
+
+    if (
+        [string]::IsNullOrWhiteSpace($PrintheadSerial) -or
+        $PrintheadSerial -eq '?'
+    ) {
+        # Variabel tidak didukung firmware / response kosong.
+        return $null
+    }
+
+    return $PrintheadSerial
+}
+
+
 function Parse-NumericValue {
 
     param (
@@ -551,6 +598,7 @@ function Send-ToApi {
 
         collectorHostname = $Script:CollectorHostname
         collectorIp = $Script:CollectorIp
+        printheadId = $Script:PrintheadId
 
         meters = $Meters
 
@@ -689,6 +737,46 @@ try {
 
     Write-Log "Printer ID    : $Script:PrinterId"
     Write-Log "Printer Model : $Script:PrinterModel"
+
+    # --------------------------------------------------------
+    # PRINTHEAD SERIAL (via TCP)
+    # --------------------------------------------------------
+    # Diambil langsung dari printer (Link-OS getvar):
+    #   printhead : ! U1 getvar "device.serial_numbers.printhead"
+    #
+    # NON-FATAL: gagal membaca / variabel tidak didukung ->
+    # diisi null + WARNING, proses tetap lanjut.
+    # --------------------------------------------------------
+
+    Write-Log `
+        -Message "Reading printhead serial number..."
+
+    try {
+
+        $Script:PrintheadId = Get-PrintheadSerial `
+            -IPAddress $PrinterIP `
+            -Port $PrinterPort `
+            -ConnectionTimeoutMs $ConnectionTimeoutMs `
+            -ResponseTimeoutMs $ResponseTimeoutMs
+
+        if ($null -eq $Script:PrintheadId) {
+
+            Write-Log `
+                -Message "Printhead serial not available. Field printheadId will be null." `
+                -Level "WARNING"
+        }
+        else {
+            Write-Log "Printhead ID   : $Script:PrintheadId"
+        }
+    }
+    catch {
+
+        $Script:PrintheadId = $null
+
+        Write-Log `
+            -Message "Failed to read printhead serial: $($_.Exception.Message)" `
+            -Level "WARNING"
+    }
 
     # --------------------------------------------------------
     # COLLECTOR INFO (KOMPUTER INI)

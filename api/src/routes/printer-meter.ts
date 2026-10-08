@@ -28,6 +28,7 @@ interface PostPayload {
   measuredAt?: unknown
   collectorHostname?: unknown
   collectorIp?: unknown
+  printheadId?: unknown
   meters?: unknown
   rawMeters?: unknown
 }
@@ -164,6 +165,11 @@ routes.post('/', async (c) => {
   const meters = body.meters as Record<string, unknown>
   const rawMeters = rawMetersResult.data
 
+  // Serial printhead (opsional — kompatibel dengan client lama).
+  const printheadId = isNonEmptyString(body.printheadId)
+    ? body.printheadId.trim()
+    : null
+
   // --------------------------------------------------------
   // Simpan dalam 1 transaction: upsert printer -> insert reading
   // --------------------------------------------------------
@@ -223,6 +229,7 @@ routes.post('/', async (c) => {
           typeof body.collectorIp === 'string' && body.collectorIp !== ''
             ? body.collectorIp
             : null,
+        printheadId,
         totalLabelCount: pickMeterValue(meters, 'totalLabelCount'),
         totalPrintLength: pickMeterValue(meters, 'totalPrintLength'),
         printheadOdometer: pickMeterValue(meters, 'printheadOdometer'),
@@ -273,6 +280,7 @@ routes.get('/', async (c) => {
         measuredAt: meterReadings.measuredAt,
         collectorHostname: meterReadings.collectorHostname,
         collectorIp: meterReadings.collectorIp,
+        printheadId: meterReadings.printheadId,
         totalLabelCount: meterReadings.totalLabelCount,
         totalPrintLength: meterReadings.totalPrintLength,
         printheadOdometer: meterReadings.printheadOdometer,
