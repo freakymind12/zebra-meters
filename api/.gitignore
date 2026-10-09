@@ -1,13 +1,17 @@
 # deps
 node_modules/
 
-# environment (berisi kredensial)
+# Environment (berisi kredensial)
 .env
 .env.local
+.env.development
+.env.production
+.env.*.local
+!.env.example
+!.env.production.example
 
-# drizzle artifacts
+# Drizzle artifacts
 drizzle/
 
-# runtime logs
+# Runtime logs
 *.log
-

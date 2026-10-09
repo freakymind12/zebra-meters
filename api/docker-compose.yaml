@@ -1,12 +1,16 @@
 # =============================================================================
-# ZebraMeter — Full stack (API + MySQL + phpMyAdmin)
+# ZebraMeter — DEVELOPMENT (API opsional + MySQL + phpMyAdmin)
 # - api    : backend Bun/Hono (endpoint /api/printer-meter), build dari Dockerfile
 # - mysql  : database untuk API
 # - phpmyadmin : UI untuk inspect DB
 #
-# Cara pakai:
-#   docker compose up -d --build  # build API + start semua service
-#   docker compose ps             # cek status
+# Cara pakai (dev yang direkomendasikan):
+#   docker compose up -d mysql phpmyadmin  # database saja
+#   bun run dev                              # API native + hot reload
+#
+# Full stack lokal (opsional):
+#   docker compose up -d --build
+#   docker compose ps                        # cek status
 #   docker compose logs -f api    # log backend
 #   docker compose down           # stop (data TETAP tersimpan di named volume)
 #   docker compose down -v        # stop + HAPUS data (berhati-hatilah)
@@ -36,6 +40,8 @@ services:
       # "3000:3000" -> akses dari host; ganti API_PORT di .env jika perlu
       - "${API_PORT:-3000}:3000"
     environment:
+      # Full-stack lokal tetap development (Dockerfile default = production).
+      NODE_ENV: development
       # Host MySQL = nama service di jaringan compose (BUKAN localhost)
       DB_HOST: mysql
       DB_PORT: "3306"

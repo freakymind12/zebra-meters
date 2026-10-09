@@ -1,0 +1,114 @@
+# =============================================================================
+# ZebraMeter — PRODUCTION (VM): API + MySQL + phpMyAdmin
+#
+# Persiapan sekali:
+#   cp .env.production.example .env.production
+#   # Isi semua nilai rahasia di .env.production
+#
+# Deploy:
+#   docker compose --env-file .env.production \
+#     -f docker-compose.prod.yaml up -d --build
+#
+# Catatan keamanan:
+#   - API dipublikasikan ke jaringan agar collector dapat mengirim data.
+#   - MySQL tidak dipublikasikan dan hanya dapat diakses dalam network Compose.
+#   - phpMyAdmin hanya bind ke loopback VM (akses melalui SSH tunnel).
+# =============================================================================
+
+name: zebrameter-prod
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zebrameter-api
+    container_name: zebrameter-api
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: "${MYSQL_USER:-zebrameter}"
+      DB_PASSWORD: "${MYSQL_PASSWORD:?MYSQL_PASSWORD wajib di-set di .env.production}"
+      DB_NAME: "${MYSQL_DATABASE:-zebrameter_db}"
+      API_KEY: "${API_KEY:?API_KEY wajib di-set di .env.production}"
+      TZ: "${TZ:-Asia/Jakarta}"
+      PORT: "3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "try { const r = await fetch('http://127.0.0.1:3000/health'); process.exit(r.ok ? 0 : 1) } catch { process.exit(1) }",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - zebrameter-net
+
+  mysql:
+    image: mysql:8.4
+    container_name: zebrameter-mysql
+    restart: always
+    # Sengaja tanpa `ports`: database tidak diekspos keluar Docker network.
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD wajib di-set di .env.production}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-zebrameter_db}"
+      MYSQL_USER: "${MYSQL_USER:-zebrameter}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:?MYSQL_PASSWORD wajib di-set di .env.production}"
+      TZ: "${TZ:-Asia/Jakarta}"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+07:00
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - zebrameter-net
+
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    container_name: zebrameter-phpmyadmin
+    restart: always
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${PMA_PORT:-8080}:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: "3306"
+      PMA_ARBITRARY: "0"
+      UPLOAD_LIMIT: "64M"
+      TZ: "${TZ:-Asia/Jakarta}"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - zebrameter-net
+
+volumes:
+  mysql_data:
+    name: zebrameter-mysql-data-prod
+
+networks:
+  zebrameter-net:
+    name: zebrameter-net-prod

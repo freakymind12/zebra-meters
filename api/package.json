@@ -2,11 +2,15 @@
   "name": "api",
   "scripts": {
     "dev": "bun run --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "start:prod": "bun --env-file=.env.production run start",
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "dev:db": "docker compose up -d mysql phpmyadmin",
+    "dev:db:down": "docker compose stop mysql phpmyadmin"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",

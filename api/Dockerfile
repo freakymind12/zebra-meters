@@ -46,4 +46,4 @@ ENV PORT=3000 \
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "bunx drizzle-kit push && bun src/index.ts"]
+CMD ["sh", "-c", "bunx drizzle-kit push && bun run start"]

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
+import { resolveApiKey } from '../config'
 import { db } from '../db/client'
 import {
   type MeterName,
@@ -103,7 +104,7 @@ routes.post('/', async (c) => {
   // --------------------------------------------------------
   // API key (opsional) — aktif hanya jika env API_KEY di-set
   // --------------------------------------------------------
-  const expectedApiKey = process.env.API_KEY?.trim()
+  const expectedApiKey = resolveApiKey()
   if (expectedApiKey) {
     const providedApiKey = c.req.header('X-API-Key') ?? ''
     if (providedApiKey !== expectedApiKey) {
@@ -292,11 +293,11 @@ routes.get('/', async (c) => {
       })
       .from(meterReadings)
       .innerJoin(printers, eq(meterReadings.printerId, printers.id))
-      .orderBy(meterReadings.measuredAt)
+      // Ambil N reading termuda (index desc) lalu tampilkan terbaru di atas.
+      .orderBy(desc(meterReadings.measuredAt))
       .limit(limit)
 
-    // Terbaru di atas
-    return c.json({ ok: true, count: rows.length, data: rows.reverse() })
+    return c.json({ ok: true, count: rows.length, data: rows })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.error('[GET /api/printer-meter] DB error:', message)

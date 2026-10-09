@@ -1,21 +1,28 @@
 import type { Config } from 'drizzle-kit'
+import { getDbConfig } from './src/config'
 
 /**
  * Konfigurasi Drizzle Kit (generate / push / migrate / studio).
  *
- * Kredensial diambil dari .env (lihat .env.example) —
- * default-nya sama dengan docker-compose.yaml (MySQL di localhost:3306).
+ * Kredensial diambil dari src/config.ts (sumber tunggal) —
+ * development default ke MySQL localhost:3306 (lihat .env.example).
+ *
+ * Drizzle Kit selalu meminta `dbCredentials` saat membaca config, termasuk
+ * `generate` yang tidak membuka koneksi. Karena itu config CLI boleh fallback;
+ * runtime API tetap fail-fast melalui getDbConfig() tanpa opsi ini.
  */
+const dbCredentials = getDbConfig({ allowDefaultsInProduction: true })
+
 export default {
   schema: './src/db/schema.ts',
   out: './drizzle',
   dialect: 'mysql',
   dbCredentials: {
-    host: process.env.DB_HOST ?? 'localhost',
-    port: Number(process.env.DB_PORT ?? 3306),
-    user: process.env.DB_USER ?? 'zebrameter',
-    password: process.env.DB_PASSWORD ?? 'zebrameter_secret',
-    database: process.env.DB_NAME ?? 'zebrameter_db',
+    host: dbCredentials.host,
+    port: dbCredentials.port,
+    user: dbCredentials.user,
+    password: dbCredentials.password,
+    database: dbCredentials.database,
   },
   strict: true,
   verbose: true,

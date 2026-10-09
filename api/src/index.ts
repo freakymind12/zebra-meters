@@ -1,5 +1,10 @@
 import { Hono } from 'hono'
+import { port, resolveApiKey } from './config'
 import { printerMeterRoutes } from './routes/printer-meter'
+
+// Fail-fast di production: DB_* sudah divalidasi saat modul db/client di-import,
+// di sini kita memastikan API_KEY juga tersedia sebelum server melayani request.
+resolveApiKey()
 
 const app = new Hono()
 
@@ -26,4 +31,7 @@ app.get('/health', (c) => {
 // ------------------------------------------------------------
 app.route('/api/printer-meter', printerMeterRoutes)
 
-export default app
+console.log(`ZebraMeter API listening on :${port}`)
+
+// Format ini membuat PORT dari environment authoritative untuk Bun auto-serve.
+export default { port, fetch: app.fetch }

@@ -1,9 +1,11 @@
 # Dependencies (di-install di dalam image)
 node_modules
 
-# Secrets — jangan masuk image; disuplai lewat docker-compose
+# Secrets — jangan masuk build context/image
 .env
-.env.local
+.env.*
+!.env.example
+!.env.production.example
 
 # Runtime logs
 *.log
@@ -19,6 +21,7 @@ drizzle
 Dockerfile
 .dockerignore
 docker-compose.yaml
+docker-compose.prod.yaml
 
 # VCS
 .git
