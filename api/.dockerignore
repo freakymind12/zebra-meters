@@ -1,0 +1,30 @@
+# Dependencies (di-install di dalam image)
+node_modules
+
+# Secrets — jangan masuk image; disuplai lewat docker-compose
+.env
+.env.local
+
+# Runtime logs
+*.log
+
+# Diagnostics sementara (jangan ikut ke image/build context)
+*.tmp
+.tlsdiag.js
+
+# Drizzle artifacts
+drizzle
+
+# Docker / compose files (tidak perlu jadi konteks build)
+Dockerfile
+.dockerignore
+docker-compose.yaml
+
+# VCS
+.git
+.gitignore
+
+# Editor / OS
+.vscode
+.idea
+.DS_Store

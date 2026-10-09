@@ -1,14 +1,18 @@
 # =============================================================================
-# ZebraMeter — Database stack (MySQL + phpMyAdmin)
-# Dipakai sebagai database untuk API (endpoint /api/printer-meter).
+# ZebraMeter — Full stack (API + MySQL + phpMyAdmin)
+# - api    : backend Bun/Hono (endpoint /api/printer-meter), build dari Dockerfile
+# - mysql  : database untuk API
+# - phpmyadmin : UI untuk inspect DB
 #
 # Cara pakai:
-#   docker compose up -d        # start MySQL + phpMyAdmin
-#   docker compose ps           # cek status
-#   docker compose down         # stop (data TETAP tersimpan di named volume)
-#   docker compose down -v      # stop + HAPUS data (berhati-hatilah)
+#   docker compose up -d --build  # build API + start semua service
+#   docker compose ps             # cek status
+#   docker compose logs -f api    # log backend
+#   docker compose down           # stop (data TETAP tersimpan di named volume)
+#   docker compose down -v        # stop + HAPUS data (berhati-hatilah)
 #
 # Akses:
+#   API        : http://localhost:3000  (GET /health)
 #   phpMyAdmin : http://localhost:8080
 #   MySQL      : localhost:3306 (atau dari container lain: mysql:3306)
 #
@@ -17,6 +21,47 @@
 # =============================================================================
 
 services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zebrameter-api
+    container_name: zebrameter-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        # Tunggu MySQL benar-benar sehat sebelum drizzle-kit push + server start
+        condition: service_healthy
+    ports:
+      # "3000:3000" -> akses dari host; ganti API_PORT di .env jika perlu
+      - "${API_PORT:-3000}:3000"
+    environment:
+      # Host MySQL = nama service di jaringan compose (BUKAN localhost)
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: "${MYSQL_USER:-zebrameter}"
+      DB_PASSWORD: "${MYSQL_PASSWORD:-zebrameter_secret}"
+      DB_NAME: "${MYSQL_DATABASE:-zebrameter_db}"
+      # API key opsional — kosong = endpoint terbuka tanpa auth
+      API_KEY: "${API_KEY:-}"
+      TZ: "${TZ:-Asia/Jakarta}"
+      PORT: "3000"
+    healthcheck:
+      # Bun selalu tersedia di image — tidak bergantung curl/wget
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "try { const r = await fetch('http://127.0.0.1:3000/health'); process.exit(r.ok ? 0 : 1) } catch { process.exit(1) }",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - zebrameter-net
+
   mysql:
     image: mysql:8.4
     container_name: zebrameter-mysql
@@ -64,7 +109,8 @@ services:
       UPLOAD_LIMIT: "64M"
       TZ: "${TZ:-Asia/Jakarta}"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      # image ini punya curl (bukan wget)
+      test: ["CMD", "curl", "-fsS", "http://localhost/"]
       interval: 15s
       timeout: 5s
       retries: 5
