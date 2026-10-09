@@ -1,0 +1,297 @@
+// =============================================================================
+// ZebraMeter API — Jenkins Pipeline (CI/CD → Production / VM)
+// -----------------------------------------------------------------------------
+// Prasyarat Jenkins:
+//   1. Agent dengan label `production` (Docker + Docker Compose v2 terpasang).
+//   2. Credential "Secret file" dengan ID `zebrameter-prod-env` berisi isi
+//      file `.env.production` (lihat api/.env.production.example).
+//   3. Job: "Pipeline script from SCM" → script path: `api/Jenkinsfile`
+//      (repo = monorepo zebra-meters; checkout berada di root workspace,
+//      semua aksi deploy berjalan di subfolder `api/`).
+//   4. `.env.production` TIDAK di-commit — pipeline menulisnya dari credential
+//      setiap build.
+//
+// Catatan: setiap perintah `docker compose` WAJIB menyertakan
+// `-f docker-compose.prod.yaml --env-file .env.production` karena nama file
+// compose bukan default dan variabel production (MYSQL_PASSWORD/API_KEY)
+// wajib ada sebelum compose berani start.
+// =============================================================================
+pipeline {
+    agent {
+        label 'production'
+    }
+
+    environment {
+        APP_NAME            = 'zebrameter-api'
+        APP_DIR             = 'api'
+        DOCKER_COMPOSE_FILE = 'docker-compose.prod.yaml'
+        ENV_FILE            = '.env.production'
+        ENV_CREDENTIAL_ID   = 'zebrameter-prod-env'
+        RECIPIENT_EMAIL     = 'rian.kurniawan.6n@hirose-gl.com'
+    }
+
+    options {
+        // Timeout untuk seluruh pipeline (30 menit)
+        timeout(time: 30, unit: 'MINUTES')
+        // Hapus build lama, simpan 20 terakhir
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        // Tampilkan timestamp di log
+        timestamps()
+        // Jangan jalankan build bersamaan
+        disableConcurrentBuilds()
+        // Jangan checkout otomatis di workspace default
+        skipDefaultCheckout(true)
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo "🔄 Checking out code from repository..."
+                checkout scm
+                echo "✅ Checkout complete - Branch: ${env.GIT_BRANCH ?: 'N/A'}"
+            }
+        }
+
+        stage('Debug Info') {
+            steps {
+                sh 'echo "Workspace: $WORKSPACE"'
+                sh 'pwd'
+                sh 'ls -la'
+                sh 'ls -la api'
+            }
+        }
+
+        stage('Setup Environment') {
+            steps {
+                dir(env.APP_DIR) {
+                    script {
+                        echo "⚙️ Setting up environment configuration..."
+                        withCredentials([file(credentialsId: "${env.ENV_CREDENTIAL_ID}", variable: 'ENV_CONTENT')]) {
+                            sh """
+                                cp "\$ENV_CONTENT" ${env.ENV_FILE}
+                                chmod 600 ${env.ENV_FILE}
+                                echo "✅ Environment file configured successfully"
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                dir(env.APP_DIR) {
+                    script {
+                        echo "🏗️ Building Docker images..."
+
+                        // Build image API dari Dockerfile (tanpa cache agar perubahan selalu masuk)
+                        sh '''
+                            docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" build --no-cache --pull
+                        '''
+
+                        echo "✅ Docker images built successfully"
+                    }
+                }
+            }
+        }
+
+        stage('Stop Previous Containers') {
+            steps {
+                dir(env.APP_DIR) {
+                    script {
+                        echo "🛑 Stopping previous containers..."
+                        sh '''
+                            docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" down --remove-orphans || true
+                        '''
+                        echo "✅ Previous containers stopped"
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                dir(env.APP_DIR) {
+                    script {
+                        echo "🚀 Deploying application..."
+                        sh '''
+                            docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+                        '''
+                        echo "✅ Containers started successfully"
+                    }
+                }
+            }
+        }
+
+        stage('Health Check') {
+            steps {
+                dir(env.APP_DIR) {
+                    script {
+                        echo "🏥 Performing health check..."
+
+                        // Tunggu semua container running DAN API healthy (max 150 detik).
+                        // Status "healthy" datang dari healthcheck compose yang memanggil GET /health.
+                        sh '''
+                            MAX_RETRIES=30
+                            RETRY_COUNT=0
+                            SLEEP_SECONDS=5
+
+                            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                                TOTAL_CONTAINERS=$(docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" ps -aq 2>/dev/null | wc -l)
+                                RUNNING_CONTAINERS=$(docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" ps --status running -q 2>/dev/null | wc -l)
+                                API_HEALTH=$(docker inspect --format '{{.State.Health.Status}}' zebrameter-api 2>/dev/null || echo "missing")
+
+                                if [ "$TOTAL_CONTAINERS" -gt 0 ] && [ "$RUNNING_CONTAINERS" -eq "$TOTAL_CONTAINERS" ] && [ "$API_HEALTH" = "healthy" ]; then
+                                    echo "✅ All $TOTAL_CONTAINERS containers running and API is healthy"
+                                    exit 0
+                                fi
+
+                                echo "⏳ Waiting for containers... ($RUNNING_CONTAINERS/$TOTAL_CONTAINERS running, api=$API_HEALTH)"
+                                sleep $SLEEP_SECONDS
+                                RETRY_COUNT=$((RETRY_COUNT + 1))
+                            done
+
+                            echo "❌ Health check failed"
+                            docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
+                            docker inspect --format 'api health: {{.State.Health.Status}}' zebrameter-api || true
+                            exit 1
+                        '''
+
+                        echo "✅ Health check passed!"
+                    }
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                script {
+                    echo "🧹 Cleaning up unused Docker resources..."
+
+                    sh '''
+                        # Remove dangling images (image build lama)
+                        docker image prune -f || true
+
+                        # Remove unused volumes — JANGAN diaktifkan:
+                        # named volume mysql_data (data production) bisa ikut terhapus
+                        # docker volume prune -f || true
+
+                        # Remove unused networks
+                        docker network prune -f || true
+                    '''
+
+                    echo "✅ Cleanup complete"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            dir(env.APP_DIR) {
+                sh '''
+                    echo "📊 Final Container Status:"
+                    docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" ps || true
+                '''
+            }
+        }
+
+        success {
+            script {
+                def duration = currentBuild.durationString.replace(' and counting', '')
+
+                emailext(
+                    subject: "✅ [SUCCESS] ${env.APP_NAME} - Build #${env.BUILD_NUMBER}",
+                    body: """
+                        <html>
+                        <body style="font-family: Arial, sans-serif;">
+                            <h2 style="color: #28a745;">✅ Deployment Successful!</h2>
+                            <table style="border-collapse: collapse; width: 100%;">
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Project</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${env.APP_NAME}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Build Number</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">#${env.BUILD_NUMBER}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Duration</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${duration}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Branch</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${env.GIT_BRANCH ?: 'N/A'}</td>
+                                </tr>
+                            </table>
+                            <p><a href="${env.BUILD_URL}">View Build Details</a></p>
+                        </body>
+                        </html>
+                    """,
+                    mimeType: 'text/html',
+                    to: env.RECIPIENT_EMAIL
+                )
+
+                echo "🎉 Deployment completed successfully!"
+            }
+        }
+
+        failure {
+            script {
+                def duration = currentBuild.durationString.replace(' and counting', '')
+
+                // Capture logs untuk debugging
+                dir(env.APP_DIR) {
+                    sh '''
+                        echo "📋 Container Logs (last 50 lines each):"
+                        docker compose -f "$DOCKER_COMPOSE_FILE" --env-file "$ENV_FILE" logs --tail=50 || true
+                    '''
+                }
+
+                emailext(
+                    subject: "❌ [FAILURE] ${env.APP_NAME} - Build #${env.BUILD_NUMBER}",
+                    body: """
+                        <html>
+                        <body style="font-family: Arial, sans-serif;">
+                            <h2 style="color: #dc3545;">❌ Deployment Failed!</h2>
+                            <table style="border-collapse: collapse; width: 100%;">
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Project</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${env.APP_NAME}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Build Number</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">#${env.BUILD_NUMBER}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Duration</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${duration}</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 8px; border: 1px solid #ddd;"><strong>Branch</strong></td>
+                                    <td style="padding: 8px; border: 1px solid #ddd;">${env.GIT_BRANCH ?: 'N/A'}</td>
+                                </tr>
+                            </table>
+                            <p style="color: #dc3545;"><strong>Please check the build logs for details.</strong></p>
+                            <p><a href="${env.BUILD_URL}console">View Console Output</a></p>
+                        </body>
+                        </html>
+                    """,
+                    mimeType: 'text/html',
+                    to: env.RECIPIENT_EMAIL
+                )
+
+                echo "❌ Deployment failed! Check logs for details."
+            }
+        }
+
+        aborted {
+            echo "⚠️ Build was aborted"
+            emailext(
+                subject: "⚠️ [ABORTED] ${env.APP_NAME} - Build #${env.BUILD_NUMBER}",
+                body: "Build ${env.JOB_NAME} #${env.BUILD_NUMBER} was aborted.",
+                to: env.RECIPIENT_EMAIL
+            )
+        }
+    }
+}
