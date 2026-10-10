@@ -12,9 +12,9 @@
 //      setiap build.
 //
 // Catatan: setiap perintah `docker compose` WAJIB menyertakan
-// `-f docker-compose.prod.yaml --env-file .env.production` karena nama file
-// compose bukan default dan variabel production (MYSQL_PASSWORD/API_KEY)
-// wajib ada sebelum compose berani start.
+// `-f docker-compose.yaml --env-file .env.production` karena kredensial
+// production (MYSQL_ROOT_PASSWORD/MYSQL_PASSWORD) wajib ada sebelum compose
+// berani start.
 // =============================================================================
 pipeline {
     agent {
@@ -24,7 +24,7 @@ pipeline {
     environment {
         APP_NAME            = 'zebrameter-api'
         APP_DIR             = 'api'
-        DOCKER_COMPOSE_FILE = 'docker-compose.prod.yaml'
+        DOCKER_COMPOSE_FILE = 'docker-compose.yaml'
         ENV_FILE            = '.env.production'
         ENV_CREDENTIAL_ID   = 'zebrameter-prod-env'
         RECIPIENT_EMAIL     = 'rian.kurniawan.6n@hirose-gl.com'

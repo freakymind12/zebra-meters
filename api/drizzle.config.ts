@@ -1,17 +1,15 @@
 import type { Config } from 'drizzle-kit'
-import { getDbConfig } from './src/config'
+import { dbConfig } from './src/config/env'
 
 /**
  * Konfigurasi Drizzle Kit (generate / push / migrate / studio).
  *
- * Kredensial diambil dari src/config.ts (sumber tunggal) —
- * development default ke MySQL localhost:3306 (lihat .env.example).
- *
- * Drizzle Kit selalu meminta `dbCredentials` saat membaca config, termasuk
- * `generate` yang tidak membuka koneksi. Karena itu config CLI boleh fallback;
- * runtime API tetap fail-fast melalui getDbConfig() tanpa opsi ini.
+ * Kredensial diambil dari src/config/env.ts (sumber tunggal).
+ * Dev defaults ada di schema Zod (localhost:3306, dll.) sehingga
+ * `drizzle-kit generate` / `db:push` / `db:studio` tetap jalan
+ * tanpa .env; production menyuplai DB_* lewat Docker Compose.
  */
-const dbCredentials = getDbConfig({ allowDefaultsInProduction: true })
+const dbCredentials = dbConfig
 
 export default {
   schema: './src/db/schema.ts',

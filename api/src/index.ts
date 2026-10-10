@@ -1,37 +1,62 @@
-import { Hono } from 'hono'
-import { port, resolveApiKey } from './config'
-import { printerMeterRoutes } from './routes/printer-meter'
+import { swaggerUI } from '@hono/swagger-ui'
+import { env } from '@config/env'
+import { createOpenAPIApp, globalErrorHandler } from '@config/api-response'
+import { loggerMiddleware } from '@middleware/logger'
+import { printerMeterApp } from '@routes/printer'
 
-// Fail-fast di production: DB_* sudah divalidasi saat modul db/client di-import,
-// di sini kita memastikan API_KEY juga tersedia sebelum server melayani request.
-resolveApiKey()
+// ============================================================
+// Root app (OpenAPIHono — swagger UI + OpenAPI doc)
+// ============================================================
+const app = createOpenAPIApp()
 
-const app = new Hono()
+// Global error handler — untuk semua error yang tidak tertangani route
+app.onError(globalErrorHandler)
+
+// Request logging
+app.use('*', loggerMiddleware)
 
 // ------------------------------------------------------------
-// Base
+// Base / health
 // ------------------------------------------------------------
-app.get('/', (c) => {
-  return c.json({
+app.get('/', (c) =>
+  c.json({
     name: 'ZebraMeter API',
+    docs: '/docs',
     endpoints: {
       health: 'GET /health',
       postReading: 'POST /api/printer-meter',
       listReadings: 'GET /api/printer-meter?limit=20',
+      openapiJson: 'GET /openapi.json',
     },
-  })
-})
+  }),
+)
 
-app.get('/health', (c) => {
-  return c.json({ ok: true, status: 'up' })
-})
+app.get('/health', (c) => c.json({ success: true, data: { status: 'up' } }))
 
 // ------------------------------------------------------------
-// Routes
+// Routes — printer meter (POST + GET)
 // ------------------------------------------------------------
-app.route('/api/printer-meter', printerMeterRoutes)
+app.route('/api/printer-meter', printerMeterApp)
 
-console.log(`ZebraMeter API listening on :${port}`)
+// ------------------------------------------------------------
+// OpenAPI + Swagger UI
+// ------------------------------------------------------------
+app.doc('/openapi.json', {
+  openapi: '3.0.0',
+  info: {
+    title: 'ZebraMeter API',
+    version: '1.0.0',
+    description: 'REST API untuk menerima data meter printer Zebra dan menyimpannya ke MySQL.',
+  },
+  servers: [{ url: `http://localhost:${env.PORT}`, description: 'Development' }],
+})
 
-// Format ini membuat PORT dari environment authoritative untuk Bun auto-serve.
-export default { port, fetch: app.fetch }
+app.get('/docs', swaggerUI({ url: '/openapi.json', docExpansion: 'list' }))
+
+// ============================================================
+// Start
+// ============================================================
+console.log(`ZebraMeter API listening on :${env.PORT}`)
+console.log(`Swagger UI: http://localhost:${env.PORT}/docs`)
+
+export default { port: env.PORT, fetch: app.fetch }

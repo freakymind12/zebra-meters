@@ -1,0 +1,132 @@
+# =============================================================================
+# ZebraMeter — DEVELOPMENT (API opsional + MySQL + phpMyAdmin)
+# - api    : backend Bun/Hono (endpoint /api/printer-meter), build dari Dockerfile
+# - mysql  : database untuk API
+# - phpmyadmin : UI untuk inspect DB
+#
+# Cara pakai (dev yang direkomendasikan):
+#   docker compose up -d mysql phpmyadmin  # database saja
+#   bun run dev                              # API native + hot reload
+#
+# Full stack lokal (opsional):
+#   docker compose up -d --build
+#   docker compose ps                        # cek status
+#   docker compose logs -f api    # log backend
+#   docker compose down           # stop (data TETAP tersimpan di named volume)
+#   docker compose down -v        # stop + HAPUS data (berhati-hatilah)
+#
+# Akses:
+#   API        : http://localhost:3000  (GET /health)
+#   phpMyAdmin : http://localhost:8080
+#   MySQL      : localhost:3306 (atau dari container lain: mysql:3306)
+#
+# Kredensial / konfigurasi bisa di-override lewat file .env di folder ini
+# (nilai default sudah disediakan oleh compose jika variable tidak didefinisikan).
+# =============================================================================
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: zebrameter-api
+    container_name: zebrameter-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        # Tunggu MySQL benar-benar sehat sebelum drizzle-kit push + server start
+        condition: service_healthy
+    ports:
+      # "3000:3000" -> akses dari host; ganti API_PORT di .env jika perlu
+      - "${API_PORT:-3000}:3000"
+    environment:
+      # Full-stack lokal tetap development (Dockerfile default = production).
+      NODE_ENV: development
+      # Host MySQL = nama service di jaringan compose (BUKAN localhost)
+      DB_HOST: mysql
+      DB_PORT: "3306"
+      DB_USER: "${MYSQL_USER:-zebrameter}"
+      DB_PASSWORD: "${MYSQL_PASSWORD:-zebrameter_secret}"
+      DB_NAME: "${MYSQL_DATABASE:-zebrameter_db}"
+      TZ: "${TZ:-Asia/Jakarta}"
+      PORT: "3000"
+    healthcheck:
+      # Bun selalu tersedia di image — tidak bergantung curl/wget
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "try { const r = await fetch('http://127.0.0.1:3000/health'); process.exit(r.ok ? 0 : 1) } catch { process.exit(1) }",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - zebrameter-net
+
+  mysql:
+    image: mysql:8.4
+    container_name: zebrameter-mysql
+    restart: unless-stopped
+    ports:
+      # "3306:3306" -> akses dari host; ganti jadi "3307:3306" jika port 3306 sudah dipakai
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD:-root}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE:-zebrameter_db}"
+      MYSQL_USER: "${MYSQL_USER:-zebrameter}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-zebrameter_secret}"
+      TZ: "${TZ:-Asia/Jakarta}"
+    volumes:
+      # Persistensi data — tidak hilang saat container di-recreate
+      - mysql_data:/var/lib/mysql
+      # (Opsional) eksekusi .sql awal saat pertama kali data dir dibuat:
+      # - ./db/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+07:00
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - zebrameter-net
+
+  phpmyadmin:
+    image: phpmyadmin:5.2-apache
+    container_name: zebrameter-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${PMA_PORT:-8080}:80"
+    environment:
+      PMA_HOST: mysql          # nama service MySQL di jaringan compose
+      PMA_PORT: "3306"
+      PMA_ARBITRARY: "1"       # izinkan login manual ke host lain jika perlu
+      UPLOAD_LIMIT: "64M"
+      TZ: "${TZ:-Asia/Jakarta}"
+    healthcheck:
+      # image ini punya curl (bukan wget)
+      test: ["CMD", "curl", "-fsS", "http://localhost/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - zebrameter-net
+
+volumes:
+  mysql_data:
+    name: zebrameter-mysql-data
+
+networks:
+  zebrameter-net:
+    name: zebrameter-net
+

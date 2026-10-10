@@ -9,16 +9,22 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "dev:db": "docker compose up -d mysql phpmyadmin",
-    "dev:db:down": "docker compose stop mysql phpmyadmin"
+    "dev:db": "docker compose -f \"dev,docker-compose.yaml\" up -d mysql phpmyadmin",
+    "dev:db:down": "docker compose -f \"dev,docker-compose.yaml\" stop mysql phpmyadmin"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
+    "@hono/zod-openapi": "^1.6.3",
+    "dotenv": "^18.0.7",
     "drizzle-orm": "^0.45.3",
     "hono": "^4.13.13",
-    "mysql2": "^3.24.5"
+    "mysql2": "^3.24.5",
+    "winston": "^3.19.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/winston": "^2.4.4",
     "drizzle-kit": "^0.31.11",
     "typescript": "^7.0.2"
   }

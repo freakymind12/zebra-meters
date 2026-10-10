@@ -78,10 +78,9 @@ DB_PORT=3306
 DB_USER=zebrameter
 DB_PASSWORD=zebrameter_secret
 DB_NAME=zebrameter_db
-API_KEY=
 ```
 
-`API_KEY` boleh kosong di development. Jika diisi, client harus mengirim header `X-API-Key` dengan nilai yang sama.
+Semua nilai di atas punya default di `src/config/env.ts` (skema Zod), sehingga `bun run dev` tetap jalan walau `.env` belum diisi.
 
 ## Production (VM)
 
@@ -103,7 +102,6 @@ MYSQL_ROOT_PASSWORD=<password-root-kuat>
 MYSQL_DATABASE=zebrameter_db
 MYSQL_USER=zebrameter
 MYSQL_PASSWORD=<password-database-kuat>
-API_KEY=<nilai-acak-panjang-minimal-32-karakter>
 ```
 
 File `.env.production` di-ignore oleh Git dan tidak boleh di-commit.
@@ -112,17 +110,17 @@ File `.env.production` di-ignore oleh Git dan tidak boleh di-commit.
 
 ```bash
 docker compose --env-file .env.production \
-  -f docker-compose.prod.yaml up -d --build
+  -f docker-compose.yaml up -d --build
 ```
 
 Cek status dan log:
 
 ```bash
 docker compose --env-file .env.production \
-  -f docker-compose.prod.yaml ps
+  -f docker-compose.yaml ps
 
 docker compose --env-file .env.production \
-  -f docker-compose.prod.yaml logs -f api
+  -f docker-compose.yaml logs -f api
 ```
 
 Update deployment:
@@ -130,7 +128,7 @@ Update deployment:
 ```bash
 git pull
 docker compose --env-file .env.production \
-  -f docker-compose.prod.yaml up -d --build
+  -f docker-compose.yaml up -d --build
 ```
 
 Pada production:
@@ -147,16 +145,16 @@ Kemudian buka http://localhost:8080 pada komputer lokal.
 
 ## Environment Validation
 
-Saat `NODE_ENV=production`, API gagal start jika salah satu konfigurasi berikut kosong:
+Environment divalidasi dengan **Zod** di `src/config/env.ts` saat modul di-import (fail-fast). Semua field punya default development, sehingga server tetap start tanpa `.env`. Di production, Docker Compose menyuplai `DB_*` langsung ke container.
 
-- `DB_HOST`
-- `DB_PORT`
-- `DB_USER`
-- `DB_PASSWORD`
-- `DB_NAME`
-- `API_KEY`
+Field yang dibaca:
 
-Docker Compose juga menolak start bila `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, atau `API_KEY` belum diisi.
+- `NODE_ENV` (`development` | `production`, default `development`)
+- `PORT` (default `3000`)
+- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
+- `RATE_LIMIT_MAX`, `RATE_LIMIT_WINDOW_MS` (opsional)
+
+Docker Compose juga menolak start bila `MYSQL_ROOT_PASSWORD` atau `MYSQL_PASSWORD` belum diisi.
 
 ## Endpoint
 
@@ -164,13 +162,21 @@ Docker Compose juga menolak start bila `MYSQL_ROOT_PASSWORD`, `MYSQL_PASSWORD`, 
 |---|---|---|
 | `GET` | `/` | Info dan daftar endpoint |
 | `GET` | `/health` | Health check |
+| `GET` | `/docs` | Swagger UI (interaktif) |
+| `GET` | `/openapi.json` | OpenAPI 3.0 document |
 | `POST` | `/api/printer-meter` | Simpan reading printer |
 | `GET` | `/api/printer-meter?limit=20` | Baca reading terbaru |
 
-Jika `API_KEY` diaktifkan, sertakan header:
+Semua response memakai envelope global:
 
-```text
-X-API-Key: <nilai API_KEY>
+```json
+{ "success": true, "data": { ... } }
+```
+
+atau saat error:
+
+```json
+{ "success": false, "error": "Validation failed", "details": [ ... ] }
 ```
 
 Contoh POST development:
@@ -210,7 +216,7 @@ curl -X POST http://localhost:3000/api/printer-meter \
 
 ## Catatan Keamanan
 
-- Production wajib memakai `API_KEY` yang kuat.
+- Endpoint ingest sengaja **tanpa API key** — collector hanya perlu menjangkau API. Batasi akses lewat firewall/segmentasi jaringan.
 - API saat ini melayani HTTP tanpa TLS. Untuk jaringan yang tidak sepenuhnya dipercaya, gunakan Caddy/nginx sebagai reverse proxy HTTPS di VM.
 - Container menjalankan `drizzle-kit push` saat startup. Backup volume MySQL sebelum deploy perubahan schema yang berpotensi destruktif.
 - `certs/zscaler-root-ca.crt` hanya dipakai saat build image agar `bun install` bekerja pada jaringan dengan TLS inspection; bukan sertifikat HTTPS API.

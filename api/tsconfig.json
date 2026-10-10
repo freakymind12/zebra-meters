@@ -1,9 +1,23 @@
 {
   "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@config/*": ["./src/config/*"],
+      "@middleware/*": ["./src/middleware/*"],
+      "@core/*": ["./src/core/*"],
+      "@controllers/*": ["./src/controllers/*"],
+      "@repositories/*": ["./src/repositories/*"],
+      "@routes/*": ["./src/routes/*"],
+      "@services/*": ["./src/services/*"],
+      "@utils": ["./src/utils"]
+    },
     "strict": true,
-    "skipLibCheck": true,
-    "types": ["bun"],
     "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
+    "jsxImportSource": "hono/jsx",
+    "allowJs": true,
+    "checkJs": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true
   }
 }
