@@ -9,8 +9,7 @@
   "api": {
     "url": "http://192.168.10.100:3000/api/printer-meter",
     "method": "POST",
-    "timeoutSeconds": 10,
-    "apiKey": ""
+    "timeoutSeconds": 10
   },
 
   "meters": [

@@ -16,16 +16,26 @@ ZebraMeter/
 │
 ├── api/                      # REST API — Bun + Hono + Drizzle ORM + MySQL
 │   ├── src/
-│   │   ├── index.ts          # Entry point (registrasi route, fail-fast env)
-│   │   ├── config.ts         # Konfigurasi terpusat (dev defaults / prod wajib)
+│   │   ├── index.ts          # Entry point (mount route, Swagger UI, global error handler)
+│   │   ├── config/
+│   │   │   ├── env.ts        # Validasi env (Zod, fail-fast) + dbConfig
+│   │   │   ├── api-response.ts # Envelope response global + factory OpenAPIHono
+│   │   │   └── logger.ts     # Logger (winston)
+│   │   ├── middleware/
+│   │   │   ├── logger.ts     # Request logging
+│   │   │   └── rate-limit.ts # Rate limiting per IP
 │   │   ├── db/
 │   │   │   ├── client.ts     # Koneksi MySQL (mysql2 pool + Drizzle)
 │   │   │   └── schema.ts     # Schema Drizzle (printers, meter_readings)
 │   │   └── routes/
-│   │       └── printer-meter.ts   # POST/GET /api/printer-meter
-│   ├── drizzle.config.ts     # Konfigurasi Drizzle Kit (kredensial dari src/config.ts)
-│   ├── docker-compose.yaml   # DEV: MySQL 8 + phpMyAdmin (untuk API)
-│   ├── docker-compose.prod.yaml # PROD: API + MySQL + phpMyAdmin (untuk VM)
+│   │       └── printer/      # Endpoint /api/printer-meter
+│   │           ├── schemas.ts # Zod + createRoute (OpenAPI)
+│   │           ├── post.ts    # POST /
+│   │           ├── get.ts     # GET /
+│   │           └── index.ts   # Mount semua endpoint printer
+│   ├── drizzle.config.ts     # Konfigurasi Drizzle Kit (kredensial dari config/env.ts)
+│   ├── docker-compose.yaml   # PROD: API + MySQL + phpMyAdmin (untuk VM)
+│   ├── dev,docker-compose.yaml # DEV: MySQL 8 + phpMyAdmin (untuk API)
 │   ├── .env.example          # Template env development
 │   ├── .env.production.example  # Template env production
 │   └── README.md             # 📖 Dokumentasi API (development & production)
@@ -76,14 +86,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\collect-zebra.ps1"
 
 ## Quick Start (Production — VM)
 
-Production memakai Docker Compose terpisah (`docker-compose.prod.yaml`) dengan env file sendiri (`.env.production`), MySQL tidak dipublikasikan ke host, dan `API_KEY` wajib diisi.
+Production memakai Docker Compose (`docker-compose.yaml`) dengan env file sendiri (`.env.production`); MySQL tidak dipublikasikan ke host.
 
 ```bash
 cd api
 cp .env.production.example .env.production
-# edit .env.production — isi MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD, API_KEY
+# edit .env.production — isi MYSQL_ROOT_PASSWORD, MYSQL_PASSWORD
 docker compose --env-file .env.production \
-  -f docker-compose.prod.yaml up -d --build
+  -f docker-compose.yaml up -d --build
 ```
 
 Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [`api/README.md`](api/README.md).
@@ -95,8 +105,8 @@ Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [
 | Development | `bun run dev` (hot reload) | Docker (`bun run dev:db`) | `api/.env` |
 | Production | Docker Compose (VM) | Docker Compose | `api/.env.production` |
 
-- Development: default lokal di `src/config.ts` — `DB_*` boleh kosong (fallback ke localhost), `API_KEY` opsional.
-- Production: `NODE_ENV=production` — API **gagal start** jika `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, atau `API_KEY` kosong (fail-fast).
+- Environment divalidasi dengan **Zod** di `api/src/config/env.ts` (fail-fast) — semua field punya default development, jadi `bun run dev` tetap jalan tanpa `.env`.
+- Production menyuplai `DB_*` lewat Docker Compose (`NODE_ENV=production`).
 
 ## Endpoint API
 
@@ -104,11 +114,13 @@ Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [
 |---|---|---|
 | `GET` | `/` | Info & daftar endpoint |
 | `GET` | `/health` | Health check |
-| `POST` | `/api/printer-meter` | Terima data meter dari client (payload: `printerId`, `model`, `ipAddress`, `measuredAt`, `collectorHostname`, `collectorIp`, `meters`, `rawMeters`) |
+| `GET` | `/docs` | Swagger UI (interaktif) |
+| `GET` | `/openapi.json` | OpenAPI 3.0 document |
+| `POST` | `/api/printer-meter` | Terima data meter dari client (payload: `printerId`, `model`, `ipAddress`, `measuredAt`, `collectorHostname`, `collectorIp`, `printheadId`, `meters`, `rawMeters`) |
 | `GET` | `/api/printer-meter?limit=20` | Baca reading terbaru (untuk testing/verifikasi) |
 
-- **Auth (opsional):** isi `API_KEY` di `api/.env` untuk mengaktifkan wajib header `X-API-Key`.
-- Response sukses POST: `201 { "ok": true, "id": <readingId> }`.
+- Endpoint **tanpa API key** — collector cukup menjangkau API.
+- Response memakai envelope global: `{ "success": true, "data": ... }` atau `{ "success": false, "error": ... }`. Sukses POST: `201 { "success": true, "data": { "id": <readingId>, ... } }`.
 
 ## Perintah API Berguna
 

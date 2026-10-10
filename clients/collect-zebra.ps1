@@ -618,14 +618,6 @@ function Send-ToApi {
         "Accept" = "application/json"
     }
 
-    if (
-        $null -ne $Config.api.apiKey -and
-        "$($Config.api.apiKey)".Trim() -ne ""
-    ) {
-
-        $Headers["X-API-Key"] = $Config.api.apiKey
-    }
-
     # --------------------------------------------------------
     # SEND
     # --------------------------------------------------------

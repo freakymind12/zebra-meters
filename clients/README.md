@@ -39,7 +39,7 @@ Fitur utama:
 - Semua detail jaringan, timeout, daftar meter, API, dan logging **dikendalikan lewat `config.json`** (tanpa mengubah script).
 - **Parsing otomatis** nilai numerik dari response printer (mis. `"466886 INCHES, 1185892 CENTIMETERS"` → `466886`).
 - **Logging** ke konsol dan ke file (append), dengan timestamp dan level (`INFO` / `ERROR`).
-- **Pengiriman ke MES API** (HTTP POST JSON, opsional dengan header `X-API-Key`) — *saat ini dinonaktifkan secara default, lihat [bagian 10](#10-integrasi-ke-mes-api).*
+- **Pengiriman ke MES API** (HTTP POST JSON) — *saat ini dinonaktifkan secara default, lihat [bagian 10](#10-integrasi-ke-mes-api).*
 - **Exit code terstruktur** sehingga mudah dipantau oleh sistem lain (Task Scheduler, monitoring, dsb.).
 
 ## 2. Cara Kerja (Alur Data)
@@ -120,10 +120,11 @@ Seluruh perilaku diatur dari `config.json`. Berikut penjelasan **setiap field**:
 
 | Field | Tipe | Contoh | Keterangan |
 |---|---|---|---|
-| `url` | string | `"http://192.168.10.100:3000/api/printer-meter"` | Endpoint penerima data meter. **Wajib diisi** (dicek saat validasi) meski pengiriman API sedang nonaktif. |
+| `url` | string | `"http://192.168.10.100:3000/api/printer-meter"` | Endpoint penerima data meter. **Wajib diisi** (dicek saat validasi). |
 | `method` | string | `"POST"` | Metode HTTP yang dipakai `Invoke-RestMethod`. |
 | `timeoutSeconds` | number | `10` | Batas waktu (detik) request HTTP ke API. |
-| `apiKey` | string | `""` | API key opsional. **Jika kosong**, header tidak dikirim. **Jika diisi**, script mengirim header tambahan `X-API-Key: <nilai>` — sesuaikan dengan requirement API Anda. |
+
+> Endpoint API **tidak memerlukan API key** — collector cukup menjangkau `api.url`.
 
 ### 5.3 `meters` — Daftar meter yang dibaca
 
@@ -168,8 +169,7 @@ Contoh — menambah 1 meter baru (mis. versi firmware):
   "api": {
     "url": "http://192.168.10.100:3000/api/printer-meter",
     "method": "POST",
-    "timeoutSeconds": 10,
-    "apiKey": ""
+    "timeoutSeconds": 10
   },
 
   "meters": [
@@ -285,7 +285,7 @@ Keterangan flag:
 | `0` | ✅ Sukses | Meter terbaca semua; proses selesai normal. |
 | `1` | ❌ Konfigurasi bermasalah | `config.json` tidak ditemukan, JSON gagal di-parse, atau ada field wajib yang kosong. Periksa [bagian 5](#5-konfigurasi-configjson). |
 | `2` | ❌ Printer tidak terjangkau | Koneksi TCP timeout / gagal. Cek IP, port, jaringan, dan firewall (lihat [bagian 6.1](#61-cek-koneksi-printer-dulu-disarankan)). |
-| `3` | ❌ Koleksi sukses, pengiriman API gagal | Hanya muncul **jika fitur API diaktifkan** ([bagian 10](#10-integrasi-ke-mes-api)). Cek URL API, server MES, dan `apiKey`. |
+| `3` | ❌ Koleksi sukses, pengiriman API gagal | Hanya muncul **jika fitur API diaktifkan** ([bagian 10](#10-integrasi-ke-mes-api)). Cek `api.url` dan server MES. |
 | `4` | ❌ Gagal membaca identitas printer | Serial number / model dari printer gagal dibaca (mis. variabel `getvar` tidak ada, printer tidak merespons). Cek koneksi & nama variabel getvar. |
 | `99` | ❌ Error tak terduga | Ada exception yang tidak tertangani — baca pesan error di log. |
 
@@ -394,14 +394,14 @@ Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** — data
     }
 ```
 
-4. Pastikan `config.json` → `api.url` (dan `method`, `timeoutSeconds`, opsional `apiKey`) sudah benar.
+4. Pastikan `config.json` → `api.url` (dan `method`, `timeoutSeconds`) sudah benar.
 5. Simpan, lalu jalankan ulang script. Log akan menampilkan `"Sending meter data to API:"` diikuti payload JSON, lalu `"API request successful."` atau `"API request failed: ..."`.
 
 ### 10.3 Format payload yang dikirim
 
 - **Metode:** `POST` (sesuai `api.method`)
 - **Content-Type:** `application/json`
-- **Headers:** `Accept: application/json`, dan `X-API-Key: <apiKey>` **hanya jika** `apiKey` tidak kosong
+- **Headers:** `Accept: application/json` (tanpa API key)
 - **Body:**
 
 ```json
@@ -457,12 +457,17 @@ Invoke-RestMethod `
   -Uri "http://192.168.10.100:3000/api/printer-meter" `
   -Method POST `
   -ContentType "application/json" `
-  -Headers @{ "X-API-Key" = "key-anda" } `
-  -Body '{"printerId":"TESTING-PRINTER","model":"ZT620","meters":{"totalLabelCount":1}}' `
+  -Body '{"printerId":"TESTING-PRINTER","model":"ZT620","ipAddress":"192.168.41.254","measuredAt":"2026-10-06T08:32:20+07:00","meters":{"totalLabelCount":1},"rawMeters":{"totalLabelCount":{"raw":"1","value":1}}}' `
   -TimeoutSec 10
 ```
 
-Jika test ini sukses tapi script exit code 3, periksa kembali `api.url` / `api.method` / `apiKey` di `config.json` dan log detail errornya.
+Response sukses (201):
+
+```json
+{ "success": true, "data": { "id": 42, "printerRowId": 7, "message": "Meter reading tersimpan" } }
+```
+
+Jika test ini sukses tapi script exit code 3, periksa kembali `api.url` / `api.method` di `config.json` dan log detail errornya.
 
 ## 11. Menjadwalkan Otomatis (Task Scheduler)
 
