@@ -9,6 +9,7 @@
     "db:push": "drizzle-kit push",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "dummy:inject": "bun src/script/injectDummy.ts",
     "dev:db": "docker compose -f \"dev,docker-compose.yaml\" up -d mysql phpmyadmin",
     "dev:db:down": "docker compose -f \"dev,docker-compose.yaml\" stop mysql phpmyadmin"
   },
