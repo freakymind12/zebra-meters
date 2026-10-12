@@ -3,11 +3,11 @@
     "ip": "192.168.41.254",
     "port": 9100,
     "connectionTimeoutMs": 5000,
-    "responseTimeoutMs": 2000
+    "responseTimeoutMs": 5000
   },
 
   "api": {
-    "url": "http://192.168.10.100:3000/api/printer-meter",
+    "url": "http://192.168.41.250:3000/api/printer-meter",
     "method": "POST",
     "timeoutSeconds": 10
   },

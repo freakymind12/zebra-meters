@@ -808,17 +808,17 @@ try {
     # SEND API
     # --------------------------------------------------------
 
-    # $ApiOK = Send-ToApi `
-    #     -MeterResults $MeterResults
+    $ApiOK = Send-ToApi `
+        -MeterResults $MeterResults
 
-    # if (-not $ApiOK) {
+    if (-not $ApiOK) {
 
-    #     Write-Log `
-    #         -Message "Meter collection completed but API delivery failed." `
-    #         -Level "ERROR"
+        Write-Log `
+            -Message "Meter collection completed but API delivery failed." `
+            -Level "ERROR"
 
-    #     exit 3
-    # }
+        exit 3
+    }
 
     Write-Log "Meter collection completed successfully."
 

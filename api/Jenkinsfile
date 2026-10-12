@@ -27,7 +27,7 @@ pipeline {
         DOCKER_COMPOSE_FILE = 'docker-compose.yaml'
         ENV_FILE            = '.env.production'
         ENV_CREDENTIAL_ID   = 'zebrameter-prod-env'
-        RECIPIENT_EMAIL     = 'rian.kurniawan.6n@hirose-gl.com'
+        RECIPIENT_EMAIL     = 'rian.kurniawan@daikin-diid.co.id'
     }
 
     options {
