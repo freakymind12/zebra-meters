@@ -1,6 +1,8 @@
 # ZebraMeter — Panduan Lengkap
 
-**ZebraMeter** adalah utilitas berbasis **Windows PowerShell** untuk membaca data *meter / odometer* dari printer label **Zebra** (misal: **ZT620**) melalui jaringan, lalu — secara opsional — mengirimkannya ke sistem **MES** (*Manufacturing Execution System*) melalui HTTP POST.
+**ZebraMeter** adalah utilitas berbasis **Windows PowerShell** untuk membaca data *meter / odometer* dari printer label **Zebra** (misal: **ZT620**) melalui jaringan, lalu mengirimkannya ke sistem **MES** (*Manufacturing Execution System*) melalui HTTP POST.
+
+> Satu PC mesin bisa memonitor **lebih dari satu printer** sekaligus — semua didefinisikan dalam satu `config.json`.
 
 > Tool ini **tidak membutuhkan** Node.js, Python, atau library eksternal apa pun. Cukup Windows PowerShell bawaan sistem.
 
@@ -9,7 +11,8 @@
 | **Lokasi project** | `D:\Rian\PROJECT\ZebraMeter` |
 | **Script utama** | `collect-zebra.ps1` |
 | **Konfigurasi** | `config.json` |
-| **Printer (contoh)** | Zebra ZT620 @ `192.168.41.254:9100` |
+| **Mode** | **Multi-printer** (array `printers`) — 1 PC → banyak printer |
+| **Printer (contoh)** | Zebra ZT620 @ `192.168.41.254:9100`, `192.168.41.253:9100` |
 | **Endpoint API (contoh)** | `http://192.168.10.100:3000/api/printer-meter` |
 | **File log (contoh)** | `C:\MES\ZebraMeter\logs\zebra-meter.log` |
 
@@ -34,42 +37,51 @@
 
 Fitur utama:
 
-- Membaca **6 meter bawaan** (dapat ditambah) dari printer Zebra lewat koneksi **TCP port 9100** (raw socket).
+- **Multi-printer**: satu PC bisa memonitor **banyak printer** sekaligus dari satu `config.json` — cukup tambah objek di array `printers`.
+- Membaca **6 meter bawaan** (dapat ditambah) dari **tiap** printer lewat koneksi **TCP port 9100** (raw socket).
 - Menggunakan perintah Link-OS **`! U1 getvar "<nama_variabel>"`** — perintah standar printer Zebra yang mendukung Link-OS.
-- Semua detail jaringan, timeout, daftar meter, API, dan logging **dikendalikan lewat `config.json`** (tanpa mengubah script).
+- Semua detail jaringan, timeout, daftar printer, daftar meter, API, dan logging **dikendalikan lewat `config.json`** (tanpa mengubah script).
 - **Parsing otomatis** nilai numerik dari response printer (mis. `"466886 INCHES, 1185892 CENTIMETERS"` → `466886`).
-- **Logging** ke konsol dan ke file (append), dengan timestamp dan level (`INFO` / `ERROR`).
-- **Pengiriman ke MES API** (HTTP POST JSON) — *saat ini dinonaktifkan secara default, lihat [bagian 10](#10-integrasi-ke-mes-api).*
-- **Exit code terstruktur** sehingga mudah dipantau oleh sistem lain (Task Scheduler, monitoring, dsb.).
+- **Logging** ke konsol dan ke file (append), dengan timestamp dan level (`INFO` / `ERROR`), plus blok **`SUMMARY`** berisi status semua printer di akhir run.
+- **Pengiriman ke MES API** (HTTP POST JSON) — **1 request per printer** per run.
+- **Ketahanan**: kegagalan satu printer (mati / tidak terjangkau / gagal kirim) **tidak menghentikan** printer lain.
+- **Exit code terstruktur & agregat** sehingga mudah dipantau oleh sistem lain (Task Scheduler, monitoring, dsb.).
 
 ## 2. Cara Kerja (Alur Data)
 
 ```
-   Zebra Printer (ZT620)
-           │
-           │  TCP port 9100 (raw socket)
-           │  kirim: ! U1 getvar "odometer.total_label_count"
-           │  terima: "36894"
-           ▼
-   collect-zebra.ps1 (Windows PowerShell)
+   Zebra Printer #1        Zebra Printer #2        Zebra Printer #N
+   (192.168.41.254)        (192.168.41.253)        (...)
+        │                        │                        │
+        │  TCP port 9100         │  TCP port 9100         │
+        │  ! U1 getvar "..."     │  ! U1 getvar "..."     │
+        ▼                        ▼                        ▼
+   collect-zebra.ps1 (Windows PowerShell) — diproses BERURUTAN
        1. Baca config.json (sefolder dengan script)
-       2. Validasi konfigurasi (field wajib harus terisi)
-       3. Test koneksi TCP ke printer
-       4. Untuk TIAP meter: buka koneksi TCP baru → kirim perintah getvar → baca response
-       5. Parse response menjadi angka (raw + value)
-       6. (Opsional) Kirim hasil sebagai JSON POST ke MES API   ← saat ini NONAKTIF
-       7. Tulis semua aktivitas ke log
+       2. Validasi konfigurasi (api.url + minimal 1 printer)
+       3. Untuk TIAP printer (loop):
+          a. Test koneksi TCP
+          b. Baca identitas (serial + model) & printhead
+          c. Untuk TIAP meter: buka koneksi TCP baru -> getvar -> baca response
+          d. Parse response menjadi angka (raw + value)
+          e. Kirim hasil sebagai 1 request JSON POST ke MES API
+          f. Gagal di printer ini -> CATAT, lalu LANJUT ke printer berikutnya
+       4. Cetak blok SUMMARY (status semua printer)
+       5. Hitung exit code agregat
+       6. Tulis semua aktivitas ke log
            │
-           │  HTTP POST (application/json)
+           │  HTTP POST (application/json) — 1 request per printer
            ▼
-   MES API → http://192.168.10.100:3000/api/printer-meter
+   MES API -> http://192.168.10.100:3000/api/printer-meter
 ```
 
 Catatan penting tentang alur:
 
-- **Satu koneksi TCP dibuka per meter** (6 meter = 6 koneksi), bukan satu koneksi untuk semua.
-- Setiap pembacaan meter **selalu menunggu sampai `responseTimeoutMs` tercapai**, jadi total durasi sekali jalan **≈ (jumlah meter) × `responseTimeoutMs`**. Dengan konfigurasi default (6 meter × 2000 ms), total ≈ 12–14 detik — sesuai contoh log (08:32:06 → 08:32:20).
+- **Satu PC bisa terhubung ke banyak printer** — semua didefinisikan di array `printers` dalam `config.json`.
+- **Satu koneksi TCP dibuka per meter per printer** (2 printer × 6 meter = 12 koneksi), bukan satu koneksi untuk semua.
+- Setiap pembacaan meter **selalu menunggu sampai `responseTimeoutMs` tercapai**, jadi durasi total sekali jalan **≈ (jumlah printer) × (jumlah meter) × `responseTimeoutMs`**. Dengan 1 printer & konfigurasi default (6 meter × 2000 ms) total ≈ 12–14 detik; dengan 2 printer ≈ 24–28 detik.
 - Jika satu meter gagal dibaca, script **tetap melanjutkan** ke meter berikutnya (hasil meter yang gagal dicatat sebagai `null` + pesan error di log).
+- Jika satu **printer** gagal, script **tetap melanjutkan** ke printer berikutnya — kegagalannya dicatat di blok `SUMMARY`.
 
 ## 3. Persyaratan
 
@@ -77,8 +89,8 @@ Catatan penting tentang alur:
 |---|---|
 | **Sistem Operasi** | Windows dengan Windows PowerShell (disarankan PowerShell 5.1 — bawaan Windows 10/11 & Server 2016+) |
 | **Software tambahan** | **Tidak ada** — tanpa Node.js, tanpa Python, tanpa library eksternal |
-| **Jaringan** | PC harus menjangkau IP printer di **port 9100**; jika API diaktifkan, harus menjangkau juga URL API MES |
-| **Printer** | Printer Zebra yang mendukung perintah Link-OS `! U1 getvar` (contoh: **ZT620**). Pastikan printer sudah punya IP yang benar (lihat panduan jaringan di `ZEBRA-ZT620-USER-GUIDE.pdf`) |
+| **Jaringan** | PC harus menjangkau **semua** IP printer di **port 9100**; harus menjangkau juga URL API MES |
+| **Printer** | Printer Zebra yang mendukung perintah Link-OS `! U1 getvar` (contoh: **ZT620**) — boleh lebih dari 1 printer. Pastikan tiap printer sudah punya IP yang benar (lihat panduan jaringan di `printer_ug/`) |
 | **Hak akses** | Tidak perlu admin, asal menggunakan flag `-ExecutionPolicy Bypass` saat menjalankan script |
 
 ## 4. Struktur Project
@@ -105,16 +117,65 @@ D:\Rian\PROJECT\ZebraMeter\
 
 Seluruh perilaku diatur dari `config.json`. Berikut penjelasan **setiap field**:
 
-### 5.1 `printer` — Identitas & koneksi printer
+### 5.1 `printers` — Daftar printer yang di-monitor
+
+**Satu PC bisa monitor banyak printer.** Semua printer didefinisikan dalam array `printers`. Setiap elemen adalah objek:
 
 | Field | Tipe | Wajib | Contoh | Keterangan |
 |---|---|---|---|---|
 | `ip` | string | ✅ | `"192.168.41.254"` | IP address printer di jaringan. Harus bisa dijangkau dari PC ini. |
 | `port` | number | ✅ | `9100` | Port raw TCP printer. **`9100` adalah port standar** Zebra untuk menerima data/command via jaringan — ubah hanya jika printer Anda dikonfigurasi khusus. |
-| `connectionTimeoutMs` | number | ❌ | `5000` | Batas waktu (ms) untuk **membuka koneksi TCP** ke printer. Jika koneksi tidak terbuka dalam waktu ini → dianggap printer tidak terjangkau (exit code 2). |
-| `responseTimeoutMs` | number | ❌ | `2000` | Batas waktu (ms) untuk **menunggu response** tiap perintah meter. Naikkan jika response printer lambat/truncated; turunkan (mis. `1000`) agar proses lebih cepat. |
+| `label` | string | ❌ | `"Line-1"` | Nama/nomor line untuk **mempermudah membaca log** (tampil di banner `Printer 1/2 : ...` dan di SUMMARY). Jika kosong, otomatis diisi IP printer. **Tidak dikirim ke API** — hanya untuk log. |
+| `connectionTimeoutMs` | number | ❌ | `5000` | Batas waktu (ms) untuk **membuka koneksi TCP** ke printer ini. Jika tidak terbuka dalam waktu ini → printer dianggap tidak terjangkau (exit code 2). Default `5000`. |
+| `responseTimeoutMs` | number | ❌ | `2000` | Batas waktu (ms) untuk **menunggu response** tiap perintah meter pada printer ini. Naikkan jika response lambat/truncated; turunkan (mis. `1000`) agar lebih cepat. Default `5000`. |
 
-> ⚠️ **Field wajib saat ini adalah `ip`, `port`, dan `api.url` (lengkap di bagian 5.2).** `id` dan `model` **tidak lagi dikonfigurasi manual** — script akan membaca langsung dari printer (serial number & model) via Link-OS `getvar` sebelum koneksi ke meter dimulai. Jika pembacaan identitas gagal, script berhenti dengan **exit code 4**.
+> ⚠️ **Field wajib: `printers[].ip`, `printers[].port`, dan `api.url` (lengkap di bagian 5.2).** `id` dan `model` **tidak dikonfigurasi manual** — script membaca langsung dari tiap printer (serial number & model) via Link-OS `getvar` sebelum membaca meter.
+
+#### Menambah / mengurangi printer
+
+Cukup tambah atau hapus objek di array `printers` — **tidak perlu mengubah script**:
+
+```json
+"printers": [
+  { "label": "Line-1", "ip": "192.168.41.254", "port": 9100 },
+  { "label": "Line-2", "ip": "192.168.41.253", "port": 9100 },
+  { "label": "Line-3", "ip": "192.168.41.252", "port": 9100 }
+]
+```
+
+#### Perilaku saat run (mode multi-printer)
+
+- Printer diproses **berurutan sesuai urutan di config**.
+- **Kegagalan satu printer TIDAK menghentikan printer lain.** Printer yang gagal dilewati dan dicatat di log; printer berikutnya tetap dibaca & dikirim.
+- Setiap printer mengirim **1 request POST terpisah** ke `api.url` (bukan gabungan).
+- Di akhir run selalu dicetak blok **`SUMMARY`** berisi status tiap printer.
+- Exit code dihitung **agregat** — lihat [bagian 7](#7-kode-keluaran-exit-code).
+
+> **Kompatibilitas mundur:** config lama yang masih memakai objek tunggal `"printer": { ... }` (tanpa `printers`) **tetap diterima** — otomatis dianggap 1 printer. Jadi PC mesin yang sudah ter-deploy tidak perlu langsung diedit.
+
+#### Contoh tampilan log (2 printer)
+
+```
+[INFO] Printers configured : 2
+[INFO] ------------------------------------------------------------
+[INFO] Printer 1/2 : Line-1
+[INFO] ------------------------------------------------------------
+[INFO] Printer IP    : 192.168.41.254
+...
+[INFO] Meter collection completed successfully for Line-1.
+[INFO] ------------------------------------------------------------
+[INFO] Printer 2/2 : Line-2
+[INFO] ------------------------------------------------------------
+[INFO] Printer IP    : 192.168.41.253
+...
+[INFO] ============================================================
+[INFO] SUMMARY
+[INFO] ============================================================
+[INFO]   [1] Line-1                192.168.41.254   OK
+[INFO]   [2] Line-2                192.168.41.253   FAILED (exit code 2)
+[INFO] Printers succeeded: 1 / 2
+[INFO] ============================================================
+```
 
 ### 5.2 `api` — Endpoint MES API
 
@@ -159,12 +220,22 @@ Contoh — menambah 1 meter baru (mis. versi firmware):
 
 ```json
 {
-  "printer": {
-    "ip": "192.168.41.254",
-    "port": 9100,
-    "connectionTimeoutMs": 5000,
-    "responseTimeoutMs": 2000
-  },
+  "printers": [
+    {
+      "label": "Line-1",
+      "ip": "192.168.41.254",
+      "port": 9100,
+      "connectionTimeoutMs": 5000,
+      "responseTimeoutMs": 5000
+    },
+    {
+      "label": "Line-2",
+      "ip": "192.168.41.253",
+      "port": 9100,
+      "connectionTimeoutMs": 5000,
+      "responseTimeoutMs": 5000
+    }
+  ],
 
   "api": {
     "url": "http://192.168.10.100:3000/api/printer-meter",
@@ -233,63 +304,86 @@ Keterangan flag:
 
 > **Prasyarat kecil:** pastikan `config.json` ada di folder yang sama dengan script (lihat [bagian 4](#4-struktur-project)).
 
-### 6.3 Contoh output (sukses)
+### 6.3 Contoh output (sukses, 2 printer)
 
 ```
 [2026-10-06 08:32:06] [INFO] ============================================================
 [2026-10-06 08:32:06] [INFO] Zebra Printer Meter Collector started.
 [2026-10-06 08:32:06] [INFO] ============================================================
+[2026-10-06 08:32:06] [INFO] Printers configured : 2
+[2026-10-06 08:32:06] [INFO] ------------------------------------------------------------
+[2026-10-06 08:32:06] [INFO] Printer 1/2 : Line-1
+[2026-10-06 08:32:06] [INFO] ------------------------------------------------------------
 [2026-10-06 08:32:06] [INFO] Printer IP    : 192.168.41.254
 [2026-10-06 08:32:06] [INFO] Printer Port  : 9100
+[2026-10-06 08:32:06] [INFO] Testing connection to 192.168.41.254:9100
+[2026-10-06 08:32:06] [INFO] Printer connection successful.
 [2026-10-06 08:32:06] [INFO] Reading printer serial number...
 [2026-10-06 08:32:06] [INFO] Reading printer model...
 [2026-10-06 08:32:06] [INFO] Printer ID    : DJ123456789
 [2026-10-06 08:32:06] [INFO] Printer Model : ZT620
 [2026-10-06 08:32:06] [INFO] Reading printhead serial number...
 [2026-10-06 08:32:06] [INFO] Printhead ID   : PH1234567890
-[2026-10-06 08:32:06] [INFO] Testing connection to 192.168.41.254:9100
-[2026-10-06 08:32:06] [INFO] Printer connection successful.
 [2026-10-06 08:32:06] [INFO] Collector Hostname : DIID-310
 [2026-10-06 08:32:06] [INFO] Collector IP       : 192.168.41.250
 [2026-10-06 08:32:06] [INFO] Reading meter: totalLabelCount
 [2026-10-06 08:32:09] [INFO] totalLabelCount = "36894"
-[2026-10-06 08:32:09] [INFO] Reading meter: totalPrintLength
-[2026-10-06 08:32:11] [INFO] totalPrintLength = "466886 INCHES, 1185892 CENTIMETERS"
-[2026-10-06 08:32:11] [INFO] Reading meter: printheadOdometer
-[2026-10-06 08:32:14] [INFO] printheadOdometer = "261332943"
-[2026-10-06 08:32:14] [INFO] Reading meter: headUsage
-[2026-10-06 08:32:16] [INFO] headUsage = "466886 INCHES, 1185892 CENTIMETERS"
-[2026-10-06 08:32:16] [INFO] Reading meter: ribbonLength
-[2026-10-06 08:32:18] [INFO] ribbonLength = "444702 INCHES, 1129545 CENTIMETERS"
-[2026-10-06 08:32:18] [INFO] Reading meter: mediaLength
-[2026-10-06 08:32:20] [INFO] mediaLength = "498 INCHES, 1265 CENTIMETERS"
-[2026-10-06 08:32:20] [INFO] Meter collection completed successfully.
-[2026-10-06 08:32:20] [INFO] Zebra Printer Meter Collector finished.
-[2026-10-06 08:32:20] [INFO] ============================================================
+... (meter lainnya)
+[2026-10-06 08:32:20] [INFO] API request successful.
+[2026-10-06 08:32:20] [INFO] Meter collection completed successfully for Line-1.
+[2026-10-06 08:32:20] [INFO] ------------------------------------------------------------
+[2026-10-06 08:32:20] [INFO] Printer 2/2 : Line-2
+[2026-10-06 08:32:20] [INFO] ------------------------------------------------------------
+[2026-10-06 08:32:20] [INFO] Printer IP    : 192.168.41.253
+... (proses sama untuk printer ke-2)
+[2026-10-06 08:32:40] [INFO] ============================================================
+[2026-10-06 08:32:40] [INFO] SUMMARY
+[2026-10-06 08:32:40] [INFO] ============================================================
+[2026-10-06 08:32:40] [INFO]   [1] Line-1                192.168.41.254   OK
+[2026-10-06 08:32:40] [INFO]   [2] Line-2                192.168.41.253   OK
+[2026-10-06 08:32:40] [INFO] Printers succeeded: 2 / 2
+[2026-10-06 08:32:40] [INFO] ============================================================
+[2026-10-06 08:32:40] [INFO] Meter collection completed successfully.
+[2026-10-06 08:32:40] [INFO] Zebra Printer Meter Collector finished.
+[2026-10-06 08:32:40] [INFO] ============================================================
 ```
 
 ### 6.4 Cara membaca output
 
 - Format baris: `[timestamp] [LEVEL] pesan`.
+- `Printers configured : <n>` → jumlah printer yang dibaca dari `config.json`.
+- `Printer <i>/<n> : <label>` → awal pemrosesan printer ke-`i`. Semua log di antara banner ini dan banner berikutnya milik printer tersebut.
 - `Reading meter: <nama>` → script sedang mengirim perintah getvar untuk meter tersebut.
-- `Collector Hostname : ...` / `Collector IP : ...` → identitas komputer (PC collector) yang menjalankan pengambilan. **IP** = alamat lokal yang benar-benar dipakai menjangkau printer (akurat untuk PC multi-NIC) — berguna untuk tahu node mana yang mengirim data ke MES.
+- `Collector Hostname : ...` / `Collector IP : ...` → identitas komputer (PC collector) yang menjalankan pengambilan. **IP** = alamat lokal yang benar-benar dipakai menjangkau printer **tersebut** (akurat untuk PC multi-NIC / multi-subnet) — berguna untuk tahu node mana yang mengirim data ke MES.
 - `<nama> = <response mentah dari printer>` → **raw value** apa adanya.
-- `Meter collection completed successfully.` → semua proses selesai tanpa error fatal (exit code 0).
+- Blok **`SUMMARY`** → ringkasan akhir: status (`OK` / `FAILED (exit code N)`) untuk setiap printer, plus total sukses.
+- `Meter collection completed successfully.` → **semua** printer sukses (exit code 0).
 - **Response dua-satuan** seperti `"466886 INCHES, 1185892 CENTIMETERS"`: parser mengambil **angka pertama** → nilai numerik yang dipakai = **`466886` (INCHES)**.
-- Setelah selesai, cek `$LASTEXITCODE` (atau `echo $LASTEXITCODE` di PowerShell) untuk memastikan exit code = `0`.
+- Setelah selesai, cek `$LASTEXITCODE` (atau `echo $LASTEXITCODE` di PowerShell) untuk memastikan exit code.
 
 ## 7. Kode Keluaran (Exit Code)
 
+> **Mode multi-printer:** exit code bersifat **agregat**. Kegagalan satu printer **tidak menghentikan** printer lain — semua printer tetap diproses, lalu di akhir run exit code diambil dari **printer PERTAMA yang gagal** (berdasar urutan di `config.printers`). Printer mana yang gagal bisa dilihat di blok `SUMMARY`.
+
 | Exit Code | Arti | Penyebab / Solusi |
 |---|---|---|
-| `0` | ✅ Sukses | Meter terbaca semua; proses selesai normal. |
-| `1` | ❌ Konfigurasi bermasalah | `config.json` tidak ditemukan, JSON gagal di-parse, atau ada field wajib yang kosong. Periksa [bagian 5](#5-konfigurasi-configjson). |
-| `2` | ❌ Printer tidak terjangkau | Koneksi TCP timeout / gagal. Cek IP, port, jaringan, dan firewall (lihat [bagian 6.1](#61-cek-koneksi-printer-dulu-disarankan)). |
-| `3` | ❌ Koleksi sukses, pengiriman API gagal | Hanya muncul **jika fitur API diaktifkan** ([bagian 10](#10-integrasi-ke-mes-api)). Cek `api.url` dan server MES. |
-| `4` | ❌ Gagal membaca identitas printer | Serial number / model dari printer gagal dibaca (mis. variabel `getvar` tidak ada, printer tidak merespons). Cek koneksi & nama variabel getvar. |
-| `99` | ❌ Error tak terduga | Ada exception yang tidak tertangani — baca pesan error di log. |
+| `0` | ✅ Sukses total | **Semua** printer terbaca dan terkirim; proses selesai normal. |
+| `1` | ❌ Konfigurasi bermasalah | `config.json` tidak ditemukan, JSON gagal di-parse, `api.url` kosong, tidak ada printer, atau ada printer dengan `ip`/`port` kosong. Periksa [bagian 5](#5-konfigurasi-configjson). |
+| `2` | ❌ Ada printer tidak terjangkau | Koneksi TCP timeout / gagal ke **minimal satu** printer. Cek IP, port, jaringan, dan firewall (lihat [bagian 6.1](#61-cek-koneksi-printer-dulu-disarankan)). |
+| `3` | ❌ Ada printer: koleksi sukses, pengiriman API gagal | Cek `api.url` dan server MES ([bagian 10](#10-integrasi-ke-mes-api)). |
+| `4` | ❌ Ada printer: gagal baca identitas | Serial number / model gagal dibaca (variabel `getvar` tidak ada, printer tidak merespons). Cek koneksi & nama variabel getvar. |
+| `99` | ❌ Error tak terduga | Ada exception yang tidak tertangani di luar loop printer — baca pesan error di log. |
 
-> Exit code ini bisa dipakai oleh Task Scheduler / monitoring: mis. kirim alert hanya jika exit code ≠ 0.
+**Contoh penentuan exit code agregat:**
+
+| Urutan di config | Hasil tiap printer | Exit code |
+|---|---|---|
+| Line-1, Line-2 | Line-1 `OK`, Line-2 `OK` | `0` |
+| Line-1, Line-2 | Line-1 `OK`, Line-2 tidak terjangkau | `2` |
+| Line-1, Line-2 | Line-1 tidak terjangkau, Line-2 `OK` | `2` (dari Line-1) |
+| Line-1, Line-2 | Line-1 gagal API (`3`), Line-2 tidak terjangkau (`2`) | `3` (dari Line-1 — yang pertama gagal) |
+
+> Exit code ini bisa dipakai oleh Task Scheduler / monitoring: mis. kirim alert hanya jika exit code ≠ 0. Untuk tahu **printer mana** yang bermasalah, baca blok `SUMMARY` di file log.
 
 ## 8. Log
 
@@ -299,11 +393,12 @@ Keterangan flag:
 - Menonaktifkan tulis ke file: set `"logging": { "enabled": false }` (output tetap tampil di konsol).
 - **Rotasi/pembersihan otomatis berdasarkan `keepDays` belum diimplementasikan** — bersihkan manual bila file sudah besar.
 
-Contoh baris log ERROR:
+Contoh baris log ERROR (printer kedua tidak terjangkau, tetapi run tetap lanjut & merangkum):
 
 ```
-[2026-10-06 08:35:12] [ERROR] Connection timeout to printer 192.168.41.254:9100
-[2026-10-06 08:35:12] [ERROR] Printer is unreachable. Process stopped.
+[2026-10-06 08:35:12] [ERROR] Connection timeout to printer 192.168.41.253:9100
+[2026-10-06 08:35:12] [ERROR] Printer is unreachable. Skipping to next printer.
+[2026-10-06 08:35:12] [INFO]   [2] Line-2                192.168.41.253   FAILED (exit code 2)
 ```
 
 ## 9. Daftar Meter
@@ -352,33 +447,9 @@ Langkah verifikasi setelah mengubah `meters`:
 
 ## 10. Integrasi ke MES API
 
-### 10.1 Status saat ini: NONAKTIF (dikomentari)
+### 10.1 Status saat ini: AKTIF
 
-Pada bagian **MAIN** script (`collect-zebra.ps1`, ± baris 565–575), pemanggilan fungsi `Send-ToApi` **sedang dikomentari**:
-
-```powershell
-    # $ApiOK = Send-ToApi `
-    #     -MeterResults $MeterResults
-
-    # if (-not $ApiOK) {
-
-    #     Write-Log `
-    #         -Message "Meter collection completed but API delivery failed." `
-    #         -Level "ERROR"
-
-    #     exit 3
-    # }
-```
-
-Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** — data **belum dikirim** ke MES API.
-
-> 📌 Field `collectorHostname` & `collectorIp` **sudah disiapkan** di dalam payload `Send-ToApi` (lihat [bagian 10.3](#103-format-payload-yang-dikirim)) — akan ikut terkirim otomatis begitu blok di atas diaktifkan.
-
-### 10.2 Cara mengaktifkan pengiriman ke API
-
-1. Buka `collect-zebra.ps1` dengan editor teks (VS Code, Notepad, dsb.).
-2. Cari blok kode di atas (± baris 565–575, tepat sebelum `Write-Log "Meter collection completed successfully."`).
-3. **Hapus prefix `# ` (koma-tik + spasi)** pada setiap baris sehingga menjadi:
+Pengiriman ke MES API **sudah aktif**. Di dalam fungsi `Invoke-PrinterCollection` (bagian `SEND API`), setiap printer yang sukses dibaca akan dikirim lewat `Send-ToApi`:
 
 ```powershell
     $ApiOK = Send-ToApi `
@@ -387,21 +458,37 @@ Artinya: saat ini script **hanya membaca meter dan mencatatnya ke log** — data
     if (-not $ApiOK) {
 
         Write-Log `
-            -Message "Meter collection completed but API delivery failed." `
+            -Message "Meter collection completed but API delivery failed for $Label." `
             -Level "ERROR"
 
-        exit 3
+        return [pscustomobject]@{
+            Index = $Index
+            Label = $Label
+            Ip = $PrinterIP
+            ExitCode = 3
+        }
     }
 ```
 
-4. Pastikan `config.json` → `api.url` (dan `method`, `timeoutSeconds`) sudah benar.
-5. Simpan, lalu jalankan ulang script. Log akan menampilkan `"Sending meter data to API:"` diikuti payload JSON, lalu `"API request successful."` atau `"API request failed: ..."`.
+> 📌 Kegagalan API pada **satu printer tidak menghentikan** printer lain — printer tersebut dicatat `exit code 3` di `SUMMARY`, lalu loop lanjut ke printer berikutnya. Lihat [bagian 7](#7-kode-keluaran-exit-code).
+
+### 10.2 Menonaktifkan / mengaktifkan pengiriman ke API
+
+Untuk **menonaktifkan** pengiriman (sekadar membaca meter & mencatat log tanpa mengirim), komentari blok `SEND API` di atas dengan menambahkan prefix `# `.
+
+Untuk **mengaktifkan kembali** (atau memastikan aktif), pastikan bloknya persis seperti di [bagian 10.1](#101-status-saat-ini-aktif), lalu:
+
+1. Pastikan `config.json` → `api.url` (dan `method`, `timeoutSeconds`) sudah benar dan bisa dijangkau PC mesin.
+2. Jalankan ulang script. Log akan menampilkan `"Sending meter data to API:"` diikuti payload JSON, lalu `"API request successful."` atau `"API request failed: ..."`.
+
+> `api.url` **tetap wajib terisi** meski pengiriman dinonaktifkan, karena ikut divalidasi `Test-Configuration` (exit code 1 jika kosong).
 
 ### 10.3 Format payload yang dikirim
 
 - **Metode:** `POST` (sesuai `api.method`)
 - **Content-Type:** `application/json`
 - **Headers:** `Accept: application/json` (tanpa API key)
+- **Jumlah request:** **1 request per printer** per run. Dengan 2 printer, satu run mengirim 2 POST ke `api.url` yang sama — API membedakan printer lewat `printerId` (serial number).
 - **Body:**
 
 ```json
@@ -436,13 +523,13 @@ Keterangan field:
 
 | Field | Isi |
 |---|---|
-| `printerId` | **Serial number** printer (dibaca otomatis via getvar `usb.device.serial_string`) |
-| `model` | Model printer (dibaca otomatis via getvar `device.host_identification`). **Wajib tersedia** - jika gagal dibaca, script berhenti dengan exit code 4 |
-| `ipAddress` | Dari `printer.ip` |
+| `printerId` | **Serial number** printer yang sedang diproses (dibaca otomatis via getvar `usb.device.serial_string`). Ini **kunci unik** printer di sisi API. |
+| `model` | Model printer (dibaca otomatis via getvar `device.host_identification`). Jika gagal dibaca, printer ini dicatat exit code 4 dan **printer lain tetap diproses** |
+| `ipAddress` | Dari `printers[].ip` **printer yang sedang diproses** (bukan nilai global) |
 | `measuredAt` | Waktu pengukuran, format ISO 8601 |
-| `collectorHostname` | Hostname komputer (PC collector) yang menjalankan script — via `MachineName` |
-| `collectorIp` | IP lokal komputer collector yang dipakai menjangkau printer (diambil dari socket koneksi; fallback: IPv4 NIC aktif pertama) |
-| `printheadId` | **Serial number printhead** (dibaca otomatis via getvar `device.serial_numbers.printhead`; `null` jika tidak tersedia / gagal dibaca) |
+| `collectorHostname` | Hostname komputer (PC collector) yang menjalankan script — via `MachineName`. **Sama untuk semua printer** (satu PC) |
+| `collectorIp` | IP lokal komputer collector yang dipakai menjangkau **printer tersebut** (diambil dari socket koneksi; fallback: IPv4 NIC aktif pertama). Bisa berbeda antar printer bila PC punya lebih dari satu NIC/subnet |
+| `printheadId` | **Serial number printhead** printer tersebut (dibaca otomatis via getvar `device.serial_numbers.printhead`; `null` jika tidak tersedia / gagal dibaca) |
 | `meters` | Hanya **nilai numerik hasil parse** per meter |
 | `rawMeters` | Nilai **mentah** + nilai parse + `error` (jika pembacaan gagal) per meter |
 
@@ -514,6 +601,8 @@ Konfigurasi yang dibuat otomatis:
 | Settings | StartWhenAvailable · boleh di baterai · tidak dieksekusi dobel jika masih jalan · limit 10 menit |
 | Idempoten | Task sudah ada → dibuat ulang (overwrite otomatis) |
 
+> ⏱️ **Perhatikan durasi run vs jumlah printer.** Satu run memproses semua printer **berurutan**, jadi durasi ≈ **(jumlah printer) × 12–14 detik** (dengan 6 meter & timeout default). Task scheduler memakai **limit 10 menit** (`ExecutionTimeLimit`) — masih sangat cukup untuk ~40 printer. Jika menambah printer sampai mendekati batas itu (atau menaikkan `responseTimeoutMs`), naikkan `ExecutionTimeLimit` di `create-scheduler.ps1`.
+
 Contoh output (diambil dari run nyata):
 
 ```
@@ -575,10 +664,10 @@ Pada langkah 5 di atas, isi:
 
 ### 11.5 Hal yang perlu diperhatikan untuk otomasi
 
-- **Akses jaringan:** dengan script `create-scheduler.ps1`, task berjalan sebagai **SYSTEM** dan terbukti bisa menjangkau printer (run E2E tervalidasi di PC ini). Untuk setup manual, pastikan akun yang dipilih punya akses jaringan ke printer (dan ke MES API bila diaktifkan).
-- **Cek exit code** untuk monitoring: `0` = sukses, selain itu = gagal (lihat [bagian 7](#7-kode-keluaran-exit-code)).
+- **Akses jaringan:** dengan script `create-scheduler.ps1`, task berjalan sebagai **SYSTEM** dan terbukti bisa menjangkau printer (run E2E tervalidasi di PC ini). Untuk setup manual, pastikan akun yang dipilih punya akses jaringan ke **semua** printer (dan ke MES API).
+- **Cek exit code** untuk monitoring: `0` = semua printer sukses, selain itu = ada yang gagal (lihat [bagian 7](#7-kode-keluaran-exit-code)). Untuk tahu printer mana yang bermasalah, baca blok `SUMMARY` di log.
 - Set `logging.enabled = true` agar semua run tercatat di file log untuk audit.
-- Interval 15 menit sangat aman — satu run hanya butuh ≈ 12–14 detik dengan konfigurasi default.
+- **Semua printer berbagi satu file log** — gunakan `label` di config agar mudah membedakan baris milik printer mana.
 
 ## 12. Troubleshooting
 
@@ -588,15 +677,16 @@ Pada langkah 5 di atas, isi:
 |---|---|---|
 | `ERROR: config.json not found: ...` (exit 1) | File `config.json` tidak ada / tidak sefolder dengan script | Pastikan `config.json` ada di folder yang sama dengan `collect-zebra.ps1` |
 | `ERROR: Failed to parse config.json` (exit 1) | JSON tidak valid (trailing comma, komentar, quote salah) | Validasi: `Get-Content .\config.json -Raw \| ConvertFrom-Json` |
-| `Configuration contains empty required value.` (exit 1) | `printer.ip` / `printer.port` / `api.url` kosong | Isi semua field wajib — termasuk `api.url` meski API nonaktif |
-| `Connection timeout to printer ...` / `Printer is unreachable.` (exit 2) | IP salah, printer mati, port salah, kabel/Jaringan putus, firewall blokir 9100 | `Test-NetConnection <ip> -Port 9100`; cek panel printer & firewall |
-| `Failed to read <meter> : ...` (per meter, proses tetap lanjut) | Nama variabel `getvar` tidak didukung firmware, atau printer lambat | Cek nama variabel; naikkan `printer.responseTimeoutMs` |
-| `Failed to read printer identity: ...` (exit 4) | Serial number / model dari printer gagal dibaca (variabel `getvar` tidak ada, printer tidak merespons) | Cek koneksi & nama variabel getvar |
-| Proses terasa lama (~14 dtk) | Wajar — tiap meter menunggu hingga `responseTimeoutMs` | Turunkan `responseTimeoutMs` jika printer merespons cepat |
-| `API request failed: ...` (exit 3) | Server MES mati, URL salah, API key salah | Test endpoint manual ([bagian 10.4](#104-menguji-endpoint-api-secara-terpisah)); cek log detail |
+| `Configuration contains empty required value.` / `Configuration: ... is empty.` (exit 1) | `printers[].ip` / `printers[].port` / `api.url` kosong, atau tidak ada printer sama sekali | Isi semua field wajib; pastikan array `printers` minimal berisi 1 objek |
+| `Connection timeout to printer ...` / `Printer is unreachable. Skipping to next printer.` (exit 2) | IP salah, printer mati, port salah, kabel/jaringan putus, firewall blokir 9100 | `Test-NetConnection <ip> -Port 9100`; cek panel printer & firewall. **Printer lain tetap diproses** — lihat `SUMMARY` |
+| `Failed to read <meter> : ...` (per meter, proses tetap lanjut) | Nama variabel `getvar` tidak didukung firmware, atau printer lambat | Cek nama variabel; naikkan `responseTimeoutMs` printer tersebut |
+| `Failed to read printer identity: ...` (exit 4 untuk printer itu) | Serial number / model dari printer gagal dibaca (variabel `getvar` tidak ada, printer tidak merespons) | Cek koneksi & nama variabel getvar. Printer lain tetap diproses |
+| Proses terasa lama | Wajar — tiap meter menunggu hingga `responseTimeoutMs`, dan semua printer diproses berurutan | Turunkan `responseTimeoutMs` jika printer merespons cepat; durasi ≈ jumlah printer × jumlah meter × `responseTimeoutMs` |
+| `API request failed: ...` (exit 3 untuk printer itu) | Server MES mati, URL salah, firewall | Test endpoint manual ([bagian 10.4](#104-menguji-endpoint-api-secara-terpisah)); cek log detail |
+| Hanya 1 dari N printer yang masuk SUMMARY | Printer lain gagal koneksi/identitas/API | Baca baris `[ERROR]` di atas blok `SUMMARY` untuk tiap printer yang `FAILED` |
 | Log file tidak muncul | Folder tidak bisa ditulis / `logging.enabled = false` | Cek permission `C:\MES\ZebraMeter\logs`; set `enabled: true` |
 | `... cannot be loaded because running scripts is disabled...` | Dijalankan tanpa `-ExecutionPolicy Bypass` | Gunakan perintah lengkap di [bagian 6.2](#62-menjalankan-script-perintah-utama) |
-| Output berbeda dengan contoh (model/IP beda) | Config memang berbeda | Normal — bandingkan dengan `printer` di `config.json` Anda |
+| Output berbeda dengan contoh (model/IP/label beda) | Config memang berbeda | Normal — bandingkan dengan `printers` di `config.json` Anda |
 
 ### 12.2 Debug manual — query SATU meter langsung dari PowerShell
 
@@ -637,15 +727,17 @@ Jika snippet di atas mengembalikan nilai (mis. `"36894"`), koneksi & variabel be
 
 ## 13. Batasan & Catatan Penting
 
-1. **Pengiriman ke MES API dinonaktifkan secara default** (blok `Send-ToApi` dikomentari) — saat ini script hanya membaca & mencatat log. Cara mengaktifkan: [bagian 10](#10-integrasi-ke-mes-api).
-2. **`logging.keepDays` belum diimplementasikan** — tidak ada rotasi/pembersihan otomatis log; file log akan terus bertambah (append).
-3. **`api.url` tetap wajib** meski API nonaktif, karena ikut divalidasi `Test-Configuration`.
-4. **Satu `config.json` = satu printer.** Untuk banyak printer, salin folder project dan sesuaikan IP/ID tiap instance.
-5. **Parser mengambil angka pertama** dari response — untuk response dua-satuan hasilnya selalu satuan pertama (INCHES pada contoh default).
-6. **Tidak ada mekanisme retry** — jika koneksi/API gagal, script langsung berhenti dengan exit code terkait.
-7. **Satu koneksi TCP per meter** (bukan koneksi keep-alive) — durasi total ≈ jumlah meter × `responseTimeoutMs`.
-8. **Tidak ada mode dry-run** — setiap run akan benar-benar membaca printer (membaca odometer bersifat non-destruktif / aman).
-9. Data **raw + parsed** disimpan berdampingan di payload (`rawMeters` vs `meters`), sehingga MES bisa memakai nilai numerik sekaligus audit nilai asli.
+1. **Satu `config.json` bisa memuat banyak printer** — semua printer di array `printers`, diproses berurutan dalam satu run. Menambah/mengurangi printer tidak perlu mengubah script.
+2. **Kegagalan satu printer tidak menghentikan printer lain** — yang gagal dicatat di `SUMMARY`, lalu loop lanjut. Exit code diambil dari **printer pertama yang gagal** ([bagian 7](#7-kode-keluaran-exit-code)).
+3. **Pengiriman ke MES API aktif** — 1 request POST per printer per run. Untuk menonaktifkan, lihat [bagian 10.2](#102-menonaktifkan--mengaktifkan-pengiriman-ke-api).
+4. **`logging.keepDays` belum diimplementasikan** — tidak ada rotasi/pembersihan otomatis log; file log akan terus bertambah (append). Karena semua printer berbagi **satu** file log, ukurannya tumbuh makin cepat seiring bertambahnya printer.
+5. **`api.url` tetap wajib** meski pengiriman dinonaktifkan, karena ikut divalidasi `Test-Configuration`.
+6. **Parser mengambil angka pertama** dari response — untuk response dua-satuan hasilnya selalu satuan pertama (INCHES pada contoh default).
+7. **Tidak ada mekanisme retry** — jika koneksi/API ke sebuah printer gagal, printer itu dilewati tanpa dicoba ulang sampai run berikutnya.
+8. **Satu koneksi TCP per meter per printer** (bukan koneksi keep-alive) — durasi total ≈ jumlah printer × jumlah meter × `responseTimeoutMs`. Proses berjalan **berurutan (sekuensial)**, bukan paralel.
+9. **`label` hanya untuk log** — tidak dikirim ke API dan tidak disimpan di database. Identitas printer di sistem tetap **serial number** (`printerId`).
+10. **Tidak ada mode dry-run** — setiap run akan benar-benar membaca printer (membaca odometer bersifat non-destruktif / aman).
+11. Data **raw + parsed** disimpan berdampingan di payload (`rawMeters` vs `meters`), sehingga MES bisa memakai nilai numerik sekaligus audit nilai asli.
 
 ## 14. Referensi
 
@@ -654,7 +746,7 @@ Jika snippet di atas mengembalikan nilai (mis. `"36894"`), koneksi & variabel be
 | `ZEBRA-ZT620-USER-GUIDE.pdf` | Panduan resmi printer Zebra ZT620 (setup, jaringan, perawatan) — ada di folder project |
 | Dokumentasi **Zebra Link-OS** | Referensi perintah `! U1 getvar "<variable>"` dan daftar variabel printer |
 | Dokumentasi **Zebra Communication & Print** | Protokol port 9100 (raw TCP) Zebra |
-| `collect-zebra.ps1` | Sumber kebenaran perilaku script — komentar di dalam script menjelaskan tiap fungsi (`Write-Log`, `Test-Configuration`, `Test-PrinterConnection`, `Get-ZebraValue`, `Parse-NumericValue`, `Collect-Meters`, `Send-ToApi`) |
+| `collect-zebra.ps1` | Sumber kebenaran perilaku script — komentar di dalam script menjelaskan tiap fungsi (`Write-Log`, `Resolve-PrinterList`, `Test-Configuration`, `Test-PrinterConnection`, `Get-ZebraValue`, `Parse-NumericValue`, `Collect-Meters`, `Send-ToApi`, `Invoke-PrinterCollection`, `Write-PrinterSummary`) |
 
 ---
 
@@ -662,10 +754,12 @@ Jika snippet di atas mengembalikan nilai (mis. `"36894"`), koneksi & variabel be
 
 ```powershell
 cd D:\Rian\PROJECT\ZebraMeter
-Test-NetConnection 192.168.41.254 -Port 9100          # 1. cek koneksi printer
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\collect-zebra.ps1"   # 2. jalankan
-Get-Content C:\MES\ZebraMeter\logs\zebra-meter.log -Tail 20                    # 3. cek log
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\create-scheduler.ps1"   # 4. (opsional) jadwalkan tiap 15 menit - jalankan sebagai Admin
+Test-NetConnection 192.168.41.254 -Port 9100          # 1. cek koneksi printer #1
+Test-NetConnection 192.168.41.253 -Port 9100          # 2. cek koneksi printer #2 (dst)
+# 3. edit config.json -> isi IP semua printer di array "printers"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\collect-zebra.ps1"   # 4. jalankan
+Get-Content C:\MES\ZebraMeter\logs\zebra-meter.log -Tail 40                    # 5. cek log + blok SUMMARY
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\create-scheduler.ps1"   # 6. (opsional) jadwalkan tiap 15 menit - jalankan sebagai Admin
 ```
 
 

@@ -1,10 +1,20 @@
 {
-  "printer": {
-    "ip": "192.168.41.254",
-    "port": 9100,
-    "connectionTimeoutMs": 5000,
-    "responseTimeoutMs": 5000
-  },
+  "printers": [
+    {
+      "label": "Line-1",
+      "ip": "192.168.41.254",
+      "port": 9100,
+      "connectionTimeoutMs": 5000,
+      "responseTimeoutMs": 5000
+    },
+    {
+      "label": "Line-2",
+      "ip": "192.168.41.253",
+      "port": 9100,
+      "connectionTimeoutMs": 5000,
+      "responseTimeoutMs": 5000
+    }
+  ],
 
   "api": {
     "url": "http://192.168.41.250:3000/api/printer-meter",

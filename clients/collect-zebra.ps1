@@ -7,10 +7,10 @@
 #   - No external library required
 #
 # Flow:
-#   Zebra Printer
+#   Zebra Printer (bisa lebih dari 1 pada 1 PC)
 #       ↓ TCP 9100
 #   PowerShell
-#       ↓ HTTP POST
+#       ↓ HTTP POST (1 request per printer)
 #   MES API
 # ============================================================
 
@@ -55,7 +55,14 @@ $Script:CollectorIp = $null
 # ------------------------------------------------------------
 # Diisi otomatis dari printer via TCP setelah koneksi berhasil
 # (lihat fungsi Get-PrinterIdentity). Tidak lagi dari config.json.
+#
+# CATATAN: semua state di blok ini Direset di awal setiap iterasi
+# loop printer (lihat Invoke-PrinterCollection), karena satu run
+# bisa memproses lebih dari satu printer.
 # ------------------------------------------------------------
+
+# IP printer yang sedang diproses (dari config.printers[].ip).
+$Script:PrinterIp = $null
 
 $Script:PrinterId = $null
 $Script:PrinterModel = $null
@@ -109,24 +116,160 @@ function Write-Log {
 }
 
 
+function Resolve-PrinterList {
+
+    # --------------------------------------------------------
+    # NORMALISASI DAFTAR PRINTER
+    # --------------------------------------------------------
+    # Mendukung DUA bentuk config agar upgrade tidak memutus
+    # deployment lama:
+    #
+    #   BARU (multi) : "printers": [ {...}, {...} ]
+    #   LAMA (single): "printer":  { ip, port, ... }
+    #
+    # Jika "printers" tidak ada tapi "printer" ada, objek lama
+    # dibungkus menjadi array 1 elemen.
+    #
+    # Mengembalikan array PSCustomObject dengan field seragam:
+    #   Label, Ip, Port, ConnectionTimeoutMs, ResponseTimeoutMs
+    # --------------------------------------------------------
+
+    $Source = $null
+
+    if ($null -ne $Config.printers) {
+        $Source = @($Config.printers)
+    }
+    elseif ($null -ne $Config.printer) {
+        $Source = @($Config.printer)
+    }
+
+    if ($null -eq $Source) {
+        return @()
+    }
+
+    # --------------------------------------------------------
+    # PENTING: objek di-EMIT langsung ke pipeline (Write-Output)
+    # --------------------------------------------------------
+    # Jangan kumpulkan ke array lalu "return $array": PowerShell
+    # meng-"unwrap" array ber-1-elemen menjadi scalar, sehingga
+    # .Count kosong di PS 5.1 dan loop tidak jalan. Dengan emit
+    # per objek, caller cukup membungkus hasil dengan @():
+    #   0 printer -> @()            -> Count 0
+    #   1 printer -> @(obj)         -> Count 1
+    #   N printer -> @(obj, obj..)  -> Count N
+    # --------------------------------------------------------
+
+    foreach ($Entry in $Source) {
+
+        # Port default: 9100 (port standar raw TCP Zebra).
+        $Port = 9100
+        if ($null -ne $Entry.port -and "$($Entry.port)".Trim() -ne "") {
+            $Port = [int]$Entry.port
+        }
+
+        # Timeout default selaras dengan config lama.
+        $ConnectTimeout = 5000
+        if (
+            $null -ne $Entry.connectionTimeoutMs -and
+            "$($Entry.connectionTimeoutMs)".Trim() -ne ""
+        ) {
+            $ConnectTimeout = [int]$Entry.connectionTimeoutMs
+        }
+
+        $ResponseTimeout = 5000
+        if (
+            $null -ne $Entry.responseTimeoutMs -and
+            "$($Entry.responseTimeoutMs)".Trim() -ne ""
+        ) {
+            $ResponseTimeout = [int]$Entry.responseTimeoutMs
+        }
+
+        # Label opsional untuk log; fallback = IP.
+        $Label = ""
+        if ($null -ne $Entry.label) {
+            $Label = "$($Entry.label)".Trim()
+        }
+        if ($Label -eq "") {
+            $Label = "$($Entry.ip)".Trim()
+        }
+
+        $Ip = ""
+        if ($null -ne $Entry.ip) {
+            $Ip = "$($Entry.ip)".Trim()
+        }
+
+        Write-Output ([pscustomobject]@{
+            Label = $Label
+            Ip = $Ip
+            Port = $Port
+            ConnectionTimeoutMs = $ConnectTimeout
+            ResponseTimeoutMs = $ResponseTimeout
+        })
+    }
+}
+
+
 function Test-Configuration {
 
-    $RequiredValues = @(
-        $Config.printer.ip,
-        $Config.printer.port,
-        $Config.api.url
-    )
+    # --------------------------------------------------------
+    # VALIDASI KONFIGURASI (MODE MULTI-PRINTER)
+    # --------------------------------------------------------
+    # Wajib:
+    #   - api.url
+    #   - minimal 1 printer (via "printers" atau "printer" lama)
+    #   - tiap printer: ip + port terisi
+    #
+    # Timeout tiap printer bersifat OPSIONAL — jika kosong akan
+    # diisi default oleh Resolve-PrinterList (5000 ms).
+    # --------------------------------------------------------
 
-    foreach ($Value in $RequiredValues) {
+    if ($null -eq $Config.api.url -or "$($Config.api.url)".Trim() -eq "") {
 
-        if ($null -eq $Value -or "$Value".Trim() -eq "") {
+        Write-Log `
+            -Message "Configuration: api.url is required and empty." `
+            -Level "ERROR"
+
+        return $false
+    }
+
+    $Printers = @(Resolve-PrinterList)
+
+    if ($Printers.Count -eq 0) {
+
+        Write-Log `
+            -Message "Configuration: no printer configured (need 'printers' array or legacy 'printer' object)." `
+            -Level "ERROR"
+
+        return $false
+    }
+
+    $HasError = $false
+
+    for ($i = 0; $i -lt $Printers.Count; $i++) {
+
+        $Entry = $Printers[$i]
+
+        if ($Entry.Ip -eq "") {
 
             Write-Log `
-                -Message "Configuration contains empty required value." `
+                -Message "Configuration: printers[$i].ip is empty." `
                 -Level "ERROR"
 
-            return $false
+            $HasError = $true
         }
+
+        if ($Entry.Port -le 0) {
+
+            Write-Log `
+                -Message "Configuration: printers[$i].port is invalid." `
+                -Level "ERROR"
+
+            $HasError = $true
+        }
+    }
+
+    if ($HasError) {
+        return $false
     }
 
     return $true
@@ -582,6 +725,10 @@ function Send-ToApi {
     # --------------------------------------------------------
     # BUILD PAYLOAD
     # --------------------------------------------------------
+    # ipAddress diambil dari $Script:PrinterIp (printer yang
+    # sedang diproses pada iterasi loop ini), bukan lagi dari
+    # config global — karena kini bisa ada banyak printer.
+    # --------------------------------------------------------
 
     $Meters = @{}
 
@@ -593,7 +740,7 @@ function Send-ToApi {
     $PayloadObject = @{
         printerId = $Script:PrinterId
         model = $Script:PrinterModel
-        ipAddress = $Config.printer.ip
+        ipAddress = $Script:PrinterIp
         measuredAt = $Timestamp.ToString("o")
 
         collectorHostname = $Script:CollectorHostname
@@ -647,35 +794,55 @@ function Send-ToApi {
 }
 
 
-# ============================================================
-# MAIN
-# ============================================================
-
-Write-Log "============================================================"
-Write-Log "Zebra Printer Meter Collector started."
-Write-Log "============================================================"
-
-try {
+function Invoke-PrinterCollection {
 
     # --------------------------------------------------------
-    # VALIDATE CONFIG
+    # PROSES SATU PRINTER
+    # --------------------------------------------------------
+    # Alur: test connection -> identity -> printhead ->
+    #       collect meters -> send API
+    #
+    # Mengembalikan objek hasil, BUKAN memanggil exit, agar
+    # kegagalan satu printer TIDAK menghentikan printer lain.
+    #
+    # Arti ExitCode (sama dengan perilaku script lama):
+    #   0 = sukses
+    #   2 = printer tidak terjangkau
+    #   3 = koleksi sukses, pengiriman API gagal
+    #   4 = gagal membaca identitas printer
     # --------------------------------------------------------
 
-    if (-not (Test-Configuration)) {
+    param (
+        [int]$Index,
+        [int]$Total,
+        [pscustomobject]$Printer
+    )
 
-        Write-Log `
-            -Message "Invalid configuration. Process stopped." `
-            -Level "ERROR"
+    # --------------------------------------------------------
+    # RESET STATE PRINTER INI
+    # --------------------------------------------------------
+    # Variabel script-scope dipakai oleh Send-ToApi, jadi wajib
+    # direset tiap iterasi agar tidak membawa nilai dari printer
+    # sebelumnya. CollectorIp direset agar IP yang dilaporkan
+    # = socket yang menjangkau printer INI (beda printer bisa
+    # berada di NIC / subnet berbeda).
+    # --------------------------------------------------------
 
-        exit 1
-    }
+    $Script:PrinterIp = $null
+    $Script:PrinterId = $null
+    $Script:PrinterModel = $null
+    $Script:PrintheadId = $null
+    $Script:CollectorIp = $null
 
-    $PrinterIP = $Config.printer.ip
-    $PrinterPort = [int]$Config.printer.port
+    $Label = $Printer.Label
+    $PrinterIP = $Printer.Ip
+    $PrinterPort = $Printer.Port
+    $ConnectionTimeoutMs = $Printer.ConnectionTimeoutMs
+    $ResponseTimeoutMs = $Printer.ResponseTimeoutMs
 
-    $ConnectionTimeoutMs = [int]$Config.printer.connectionTimeoutMs
-    $ResponseTimeoutMs = [int]$Config.printer.responseTimeoutMs
-
+    Write-Log "------------------------------------------------------------"
+    Write-Log ("Printer {0}/{1} : {2}" -f $Index, $Total, $Label)
+    Write-Log "------------------------------------------------------------"
     Write-Log "Printer IP    : $PrinterIP"
     Write-Log "Printer Port  : $PrinterPort"
 
@@ -691,10 +858,15 @@ try {
     if (-not $ConnectionOK) {
 
         Write-Log `
-            -Message "Printer is unreachable. Process stopped." `
+            -Message "Printer is unreachable. Skipping to next printer." `
             -Level "ERROR"
 
-        exit 2
+        return [pscustomobject]@{
+            Index = $Index
+            Label = $Label
+            Ip = $PrinterIP
+            ExitCode = 2
+        }
     }
 
     # --------------------------------------------------------
@@ -704,7 +876,8 @@ try {
     #   serial : ! U1 getvar "usb.device.serial_string"
     #   model  : ! U1 getvar "device.host_identification"
     #
-    # Gagal membaca identitas -> STOP dengan exit code 4.
+    # Gagal membaca identitas -> catat exit code 4, lanjut ke
+    # printer berikutnya (tidak menghentikan seluruh run).
     # --------------------------------------------------------
 
     try {
@@ -721,9 +894,15 @@ try {
             -Message "Failed to read printer identity: $($_.Exception.Message)" `
             -Level "ERROR"
 
-        exit 4
+        return [pscustomobject]@{
+            Index = $Index
+            Label = $Label
+            Ip = $PrinterIP
+            ExitCode = 4
+        }
     }
 
+    $Script:PrinterIp = $PrinterIP
     $Script:PrinterId = $Identity.Id
     $Script:PrinterModel = $Identity.Model
 
@@ -814,15 +993,161 @@ try {
     if (-not $ApiOK) {
 
         Write-Log `
-            -Message "Meter collection completed but API delivery failed." `
+            -Message "Meter collection completed but API delivery failed for $Label." `
             -Level "ERROR"
 
-        exit 3
+        return [pscustomobject]@{
+            Index = $Index
+            Label = $Label
+            Ip = $PrinterIP
+            ExitCode = 3
+        }
     }
 
-    Write-Log "Meter collection completed successfully."
+    Write-Log "Meter collection completed successfully for $Label."
 
-    exit 0
+    return [pscustomobject]@{
+        Index = $Index
+        Label = $Label
+        Ip = $PrinterIP
+        ExitCode = 0
+    }
+}
+
+
+function Write-PrinterSummary {
+
+    # --------------------------------------------------------
+    # RINGKASAN HASIL PER PRINTER (di akhir run)
+    # --------------------------------------------------------
+
+    param (
+        [array]$Results
+    )
+
+    Write-Log "============================================================"
+    Write-Log "SUMMARY"
+    Write-Log "============================================================"
+
+    foreach ($Item in $Results) {
+
+        if ($Item.ExitCode -eq 0) {
+            $Status = "OK"
+        }
+        else {
+            $Status = "FAILED (exit code $($Item.ExitCode))"
+        }
+
+        Write-Log ("  [{0}] {1,-20} {2,-16} {3}" -f `
+            $Item.Index, $Item.Label, $Item.Ip, $Status)
+    }
+
+    $SuccessCount = @(
+        $Results | Where-Object { $_.ExitCode -eq 0 }
+    ).Count
+
+    Write-Log ("Printers succeeded: {0} / {1}" -f `
+        $SuccessCount, $Results.Count)
+
+    Write-Log "============================================================"
+}
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+Write-Log "============================================================"
+Write-Log "Zebra Printer Meter Collector started."
+Write-Log "============================================================"
+
+try {
+
+    # --------------------------------------------------------
+    # VALIDATE CONFIG
+    # --------------------------------------------------------
+
+    if (-not (Test-Configuration)) {
+
+        Write-Log `
+            -Message "Invalid configuration. Process stopped." `
+            -Level "ERROR"
+
+        exit 1
+    }
+
+    # --------------------------------------------------------
+    # RESOLVE DAFTAR PRINTER
+    # --------------------------------------------------------
+    # Mendukung DUA bentuk config:
+    #   - "printers" : array (multi)  -> diproses berurutan
+    #   - "printer"  : objek (legacy) -> otomatis jadi 1 elemen
+    # --------------------------------------------------------
+
+    # --------------------------------------------------------
+    # PENTING: bungkus dengan @() agar SELALU array, meski
+    # Resolve-PrinterList hanya mengembalikan 1 printer.
+    # Tanpa ini loop tidak jalan bila hanya ada 1 printer.
+    # --------------------------------------------------------
+
+    $Printers = @(Resolve-PrinterList)
+
+    Write-Log ("Printers configured : {0}" -f $Printers.Count)
+
+    # --------------------------------------------------------
+    # LOOP PER PRINTER
+    # --------------------------------------------------------
+    # Kegagalan satu printer TIDAK menghentikan printer lain.
+    # Hasil tiap printer dikumpulkan, lalu dirangkum di akhir
+    # run untuk menentukan exit code agregat.
+    # --------------------------------------------------------
+
+    $Results = @()
+
+    for ($i = 0; $i -lt $Printers.Count; $i++) {
+
+        $Outcome = Invoke-PrinterCollection `
+            -Index ($i + 1) `
+            -Total $Printers.Count `
+            -Printer $Printers[$i]
+
+        $Results += $Outcome
+    }
+
+    # --------------------------------------------------------
+    # SUMMARY (per printer)
+    # --------------------------------------------------------
+
+    Write-PrinterSummary -Results $Results
+
+    # --------------------------------------------------------
+    # AGGREGATE EXIT CODE
+    # --------------------------------------------------------
+    # 0 = semua printer sukses.
+    # Selain itu = exit code dari printer PERTAMA yang gagal
+    # (berdasar urutan di config), sehingga monitoring tetap
+    # mendapat sinyal gagal tanpa kehilangan konteks printer
+    # mana yang bermasalah (lihat SUMMARY di atas).
+    # --------------------------------------------------------
+
+    $FirstFailure = $Results |
+        Where-Object { $_.ExitCode -ne 0 } |
+        Select-Object -First 1
+
+    if ($null -eq $FirstFailure) {
+
+        Write-Log "Meter collection completed successfully."
+
+        exit 0
+    }
+
+    Write-Log `
+        -Message ("Completed with failure(s). First failed printer: " +
+                  "{0} ({1}) -> exit code {2}." -f `
+            $FirstFailure.Label, $FirstFailure.Ip, $FirstFailure.ExitCode) `
+        -Level "ERROR"
+
+    exit $FirstFailure.ExitCode
 }
 catch {
 
