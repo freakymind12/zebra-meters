@@ -17,9 +17,7 @@
 // berani start.
 // =============================================================================
 pipeline {
-    agent {
-        label 'production'
-    }
+    agent any
 
     environment {
         APP_NAME            = 'zebrameter-api'
