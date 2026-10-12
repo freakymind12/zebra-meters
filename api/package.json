@@ -10,8 +10,12 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "dummy:inject": "bun src/script/injectDummy.ts",
-    "dev:db": "docker compose -f \"dev,docker-compose.yaml\" up -d mysql phpmyadmin",
-    "dev:db:down": "docker compose -f \"dev,docker-compose.yaml\" stop mysql phpmyadmin"
+    "benchmark:refresh": "bun src/script/refreshBenchmarks.ts",
+    "benchmark:migrate": "bun src/script/migrateBenchmarks.ts",
+    "benchmark:verify": "bun src/script/verifyBenchmarks.ts",
+    "benchmark:event": "bun src/script/verifyEvent.ts",
+    "dev:db": "docker compose -f \"dev.docker-compose.yaml\" up -d mysql phpmyadmin",
+    "dev:db:down": "docker compose -f \"dev.docker-compose.yaml\" stop mysql phpmyadmin"
   },
   "dependencies": {
     "@hono/swagger-ui": "^0.6.1",

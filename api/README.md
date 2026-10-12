@@ -166,6 +166,7 @@ Docker Compose juga menolak start bila `MYSQL_ROOT_PASSWORD` atau `MYSQL_PASSWOR
 | `GET` | `/openapi.json` | OpenAPI 3.0 document |
 | `POST` | `/api/printer-meter` | Simpan reading printer |
 | `GET` | `/api/printer-meter?limit=20` | Baca reading terbaru |
+| `GET` | `/api/printhead-benchmark?limit=50&sort=head_usage_delta&head=PHxxx` | Baca benchmark count per printhead (olahan via SP) |
 
 Semua response memakai envelope global:
 

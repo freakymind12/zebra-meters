@@ -3,6 +3,7 @@ import { env } from '@config/env'
 import { createOpenAPIApp, globalErrorHandler } from '@config/api-response'
 import { loggerMiddleware } from '@middleware/logger'
 import { printerMeterApp } from '@routes/printer'
+import { printheadBenchmarkApp } from '@routes/printhead-benchmark'
 
 // ============================================================
 // Root app (OpenAPIHono — swagger UI + OpenAPI doc)
@@ -26,6 +27,7 @@ app.get('/', (c) =>
       health: 'GET /health',
       postReading: 'POST /api/printer-meter',
       listReadings: 'GET /api/printer-meter?limit=20',
+      benchmarks: 'GET /api/printhead-benchmark?limit=50',
       openapiJson: 'GET /openapi.json',
     },
   }),
@@ -34,9 +36,10 @@ app.get('/', (c) =>
 app.get('/health', (c) => c.json({ success: true, data: { status: 'up' } }))
 
 // ------------------------------------------------------------
-// Routes — printer meter (POST + GET)
+// Routes — printer meter (POST + GET) & printhead benchmark
 // ------------------------------------------------------------
 app.route('/api/printer-meter', printerMeterApp)
+app.route('/api/printhead-benchmark', printheadBenchmarkApp)
 
 // ------------------------------------------------------------
 // OpenAPI + Swagger UI
