@@ -1,0 +1,101 @@
+pipeline {
+    agent any
+
+    environment {
+        COMPOSE_FILE = 'docker-compose.yaml'
+        FRONTEND_PORT = '3001'
+        NUXT_API_BASE = 'http://api:3000'
+        HEALTH_TIMEOUT_SECONDS = '180'
+    }
+
+    options {
+        timeout(time: 40, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+        disableConcurrentBuilds()
+        skipDefaultCheckout(true)
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Validate') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        set -eu
+                        bun --version
+                        bun install --frozen-lockfile
+                        bun run typecheck
+                        bun run lint
+                    '''
+                }
+            }
+        }
+
+        stage('Build Image') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        set -eu
+                        docker compose -f "$COMPOSE_FILE" build --pull frontend
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        set -eu
+                        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans frontend nginx
+
+                        deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
+                        while [ "$(date +%s)" -lt "$deadline" ]; do
+                            app_health=$(docker inspect --format '{{.State.Health.Status}}' zebrameter-frontend 2>/dev/null || echo missing)
+                            proxy_health=$(docker inspect --format '{{.State.Health.Status}}' zebrameter-frontend-nginx 2>/dev/null || echo missing)
+                            if [ "$app_health" = "healthy" ] && [ "$proxy_health" = "healthy" ]; then
+                                echo "Frontend application and Nginx proxy are healthy"
+                                exit 0
+                            fi
+
+                            echo "Waiting for health checks (frontend=$app_health, nginx=$proxy_health)"
+                            sleep 5
+                        done
+
+                        echo "Frontend health check timed out"
+                        docker compose -f "$COMPOSE_FILE" ps || true
+                        docker compose -f "$COMPOSE_FILE" logs --tail=100 frontend nginx || true
+                        exit 1
+                    '''
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                dir('frontend') {
+                    sh '''
+                        set -eu
+                        curl --fail --silent --show-error "http://127.0.0.1:${FRONTEND_PORT}/" > /dev/null
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            dir('frontend') {
+                sh '''
+                    docker compose -f "$COMPOSE_FILE" ps || true
+                '''
+            }
+        }
+    }
+}

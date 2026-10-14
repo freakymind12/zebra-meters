@@ -35,6 +35,8 @@ ZebraMeter/
 │   │           └── index.ts   # Mount semua endpoint printer
 │   ├── drizzle.config.ts     # Konfigurasi Drizzle Kit (kredensial dari config/env.ts)
 │   ├── docker-compose.yaml   # PROD: API + MySQL + phpMyAdmin (untuk VM)
+│   ├── Dockerfile            # Image API production
+│   ├── Jenkinsfile           # Pipeline deploy API
 │   ├── dev,docker-compose.yaml # DEV: MySQL 8 + phpMyAdmin (untuk API)
 │   ├── .env.example          # Template env development
 │   ├── .env.production.example  # Template env production
@@ -48,6 +50,10 @@ ZebraMeter/
 │   └── README.md             # 📖 Dokumentasi lengkap client
 │
 ├── frontend/                 # Dashboard web — Nuxt 4 + Nuxt UI v4
+│   ├── Dockerfile            # Multi-stage image Nuxt/Nitro production
+│   ├── docker-compose.yaml   # Nuxt/Nitro + Nginx pada network production
+│   ├── nginx.conf            # Reverse proxy dan cache asset statis
+│   ├── Jenkinsfile           # Pipeline CI/CD frontend
 │   ├── app/
 │   │   ├── components/       # BenchmarkTable.vue, ReadingsTable.vue, dll.
 │   │   ├── composables/      # useZebraApi.ts (client API + formatter)
@@ -106,12 +112,24 @@ docker compose --env-file .env.production \
 
 Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [`api/README.md`](api/README.md).
 
+### Deploy UI Frontend
+
+Deploy API terlebih dahulu agar Docker network `zebrameter-net-prod` tersedia. Kemudian pada Docker host yang sama:
+
+```bash
+cd frontend
+docker compose -f docker-compose.yaml up -d --build
+```
+
+Dashboard default tersedia di `http://localhost:3001` melalui Nginx. Nitro tetap menangani SSR dan mem-proxy API melalui `http://api:3000`. Pipeline Jenkins frontend menggunakan script path `frontend/Jenkinsfile`; persyaratan agent dan konfigurasi deployment dijelaskan di [`frontend/README.md`](frontend/README.md#deployment-dengan-docker).
+
 ## Environment
 
 | Environment | API | Database | File konfigurasi |
 |---|---|---|---|
 | Development | `bun run dev` (hot reload) | Docker (`bun run dev:db`) | `api/.env` |
 | Production | Docker Compose (VM) | Docker Compose | `api/.env.production` |
+| Frontend production | Docker Compose / Jenkins (VM yang sama dengan API) | API pada network Docker production | environment Compose (`FRONTEND_PORT`, `NUXT_API_BASE`) |
 
 - Environment divalidasi dengan **Zod** di `api/src/config/env.ts` (fail-fast) — semua field punya default development, jadi `bun run dev` tetap jalan tanpa `.env`.
 - Production menyuplai `DB_*` lewat Docker Compose (`NODE_ENV=production`).
@@ -132,7 +150,7 @@ Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [
 - Response memakai envelope global: `{ "success": true, "data": ... }` atau `{ "success": false, "error": ... }`. Sukses POST: `201 { "success": true, "data": { "id": <readingId>, ... } }`.
 - `/api/printhead-benchmark` mengembalikan `{ count, data, models }`: `count` adalah **total baris yang cocok dengan filter (seluruh halaman)**, `data` hanya baris pada halaman yang diminta, dan `models` berisi semua nilai `lastModel` unik untuk mengisi filter. Detail parameter dan contoh ada di [`api/README.md`](api/README.md).
 - Dashboard web Nuxt (`frontend/`) menampilkan tabel benchmark ini dengan **filter model** (`lastModel`, termasuk opsi default “Semua Model”), **sortir numerik via header kolom** (Readings, Lifespan, Head Usage Delta, Odometer Delta, Label Delta), dan **paginasi server-side** (default 50 baris; pilihan 20/50/100). Detail ada di [`frontend/README.md`](frontend/README.md).
-- Tabel Historical Readings menyediakan filter select untuk printhead, IP address, model, dan printer ID; pemilih bulan `measuredAt`; pagination server-side; serta sorting header server-side untuk tanggal dan seluruh nilai meter numerik. Endpoint mengembalikan total hasil terfilter dan opsi filter unik. Detail parameter ada di [`api/README.md`](api/README.md).
+- Tabel Historical Readings menyediakan filter select untuk printhead, IP address, model, printer ID, dan hostname; pemilih bulan `measuredAt`; pagination server-side; serta sorting header server-side untuk tanggal dan seluruh nilai meter numerik. Endpoint mengembalikan total hasil terfilter dan opsi filter unik. Detail parameter ada di [`api/README.md`](api/README.md).
 
 ## Perintah API Berguna
 

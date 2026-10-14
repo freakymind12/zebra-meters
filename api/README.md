@@ -143,6 +143,8 @@ ssh -L 8080:127.0.0.1:8080 user@alamat-vm
 
 Kemudian buka http://localhost:8080 pada komputer lokal.
 
+- Compose membuat Docker network `zebrameter-net-prod`. Container Nuxt pada deployment UI mengakses API melalui service `api:3000`; Nginx frontend hanya terhubung ke network internal UI dan menjadi satu-satunya service frontend yang membuka port ke host. Deploy API lebih dahulu pada Docker host yang sama. Panduan image frontend, Nginx, dan pipeline Jenkins ada di [`frontend/README.md`](../frontend/README.md#deployment-dengan-docker).
+
 ## Environment Validation
 
 Environment divalidasi dengan **Zod** di `src/config/env.ts` saat modul di-import (fail-fast). Semua field punya default development, sehingga server tetap start tanpa `.env`. Di production, Docker Compose menyuplai `DB_*` langsung ke container.
@@ -193,6 +195,7 @@ atau saat error:
 | `ipAddress` | omitted | Filter alamat IP printer. |
 | `model` | omitted | Filter model printer. |
 | `printerId` | omitted | Filter ID/serial printer. |
+| `hostname` | omitted | Filter exact hostname collector (`collectorHostname`). |
 | `month` | omitted | Bulan `measuredAt` dalam format `YYYY-MM`, dihitung sebagai bulan kalender Asia/Jakarta. |
 | `sort` | `measuredAt` | Kolom yang diurutkan: `measuredAt`, `totalLabelCount`, `totalPrintLength`, `printheadOdometer`, `headUsage`, `ribbonLength`, atau `mediaLength`. |
 | `direction` | `desc` | Arah sort: `asc` atau `desc`. |
@@ -205,7 +208,7 @@ curl "http://localhost:3000/api/printer-meter?page=2&limit=20&model=ZT620&month=
 
 Kolom sortable pada UI meliputi `measuredAt` (waktu pengukuran) dan seluruh meter numerik. Header table memakai sorting manual/server-side, sehingga urutan benar untuk semua halaman. Default tanggal terbaru lebih dulu (`measuredAt`, `desc`); ties distabilkan dengan ID reading menurun.
 
-Response data berisi `count` total hasil setelah filter (semua halaman), `data` untuk halaman yang diminta, dan `filters` berisi pilihan unik lengkap (`printheadIds`, `ipAddresses`, `models`, `printerIds`, serta `hasMissingPrinthead`) yang tidak terpotong oleh halaman/filter aktif.
+Response data berisi `count` total hasil setelah filter (semua halaman), `data` untuk halaman yang diminta, dan `filters` berisi pilihan unik lengkap (`printheadIds`, `ipAddresses`, `models`, `printerIds`, `hostnames`, serta `hasMissingPrinthead`) yang tidak terpotong oleh halaman/filter aktif.
 
 Contoh POST development:
 
