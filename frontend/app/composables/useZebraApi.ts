@@ -31,15 +31,48 @@ export function useZebraApi() {
     }
   }
 
-  function fetchReadings(limit = 20) {
-    return request<PrinterMeterListData>('/api/printer-meter', { limit })
+  function fetchReadings(opts: {
+    page?: number
+    limit?: number
+    printheadId?: string
+    printheadMissing?: boolean
+    ipAddress?: string
+    model?: string
+    printerId?: string
+    month?: string
+    sort?: string
+    direction?: 'asc' | 'desc'
+  } = {}) {
+    return request<PrinterMeterListData>('/api/printer-meter', {
+      page: opts.page,
+      limit: opts.limit,
+      printheadId: opts.printheadId,
+      printheadMissing: opts.printheadMissing ? 'true' : undefined,
+      ipAddress: opts.ipAddress,
+      model: opts.model,
+      printerId: opts.printerId,
+      month: opts.month,
+      sort: opts.sort,
+      direction: opts.direction
+    })
   }
 
-  function fetchBenchmarks(opts: { limit?: number, head?: string, sort?: string } = {}) {
+  function fetchBenchmarks(opts: {
+    page?: number
+    limit?: number
+    head?: string
+    model?: string
+    sort?: string
+    direction?: 'asc' | 'desc'
+  } = {}) {
     return request<BenchmarkListData>('/api/printhead-benchmark', {
+      page: opts.page,
       limit: opts.limit,
       head: opts.head,
-      sort: opts.sort
+      // Model kosong berarti "semua model" — jangan kirim "undefined" ke API.
+      model: opts.model ? opts.model : undefined,
+      sort: opts.sort,
+      direction: opts.direction
     })
   }
 

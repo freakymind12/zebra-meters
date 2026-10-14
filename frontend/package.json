@@ -14,8 +14,10 @@
     "@iconify-json/lucide": "^1.2.142",
     "@iconify-json/simple-icons": "^1.2.99",
     "@nuxt/ui": "^4.11.3",
+    "echarts": "^6.1.0",
     "nuxt": "^4.6.1",
-    "tailwindcss": "^4.3.3"
+    "tailwindcss": "^4.3.3",
+    "vue-echarts": "^8.3.2"
   },
   "devDependencies": {
     "@nuxt/eslint": "^1.17.0",

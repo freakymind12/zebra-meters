@@ -7,23 +7,7 @@ useSeoMeta({
 
 <template>
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
-    <UPageHeader
-      title="Printer Metrics"
-      description="Monitor reading meter printer Zebra dan benchmark printhead secara real-time."
-    />
-
-    <section class="space-y-4">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="text-lg font-semibold text-highlighted">
-          Readings
-        </h2>
-        <p class="text-sm text-muted">
-          Data meter terbaru per printer
-        </p>
-      </div>
-      <ReadingsTable />
-    </section>
-
+    <SummaryChart />
     <section class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="text-lg font-semibold text-highlighted">
@@ -34,6 +18,18 @@ useSeoMeta({
         </p>
       </div>
       <BenchmarkTable />
+    </section>
+
+    <section class="space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-lg font-semibold text-highlighted">
+          Historical Readings
+        </h2>
+        <p class="text-sm text-muted">
+          Data meter terbaru per printer
+        </p>
+      </div>
+      <ReadingsTable />
     </section>
   </div>
 </template>

@@ -63,6 +63,57 @@ export const getQuerySchema = z
       .string()
       .optional()
       .openapi({ param: { name: 'limit', in: 'query' }, description: 'Jumlah reading terbaru (1-100)', example: '20' }),
+    page: z
+      .string()
+      .regex(/^[1-9]\d*$/, 'page harus bilangan bulat positif')
+      .refine((value) => Number.isSafeInteger(Number(value)) && Number(value) <= 1_000_000, 'page terlalu besar')
+      .optional()
+      .openapi({ param: { name: 'page', in: 'query' }, description: 'Halaman 1-based', example: '1' }),
+    printheadId: z
+      .string()
+      .optional()
+      .openapi({ param: { name: 'printheadId', in: 'query' }, description: 'Filter exact printhead ID' }),
+    printheadMissing: z
+      .enum(['true'])
+      .optional()
+      .openapi({ param: { name: 'printheadMissing', in: 'query' }, description: 'Set true to filter readings without a printhead ID' }),
+    ipAddress: z
+      .string()
+      .optional()
+      .openapi({ param: { name: 'ipAddress', in: 'query' }, description: 'Filter exact printer IP address' }),
+    model: z
+      .string()
+      .optional()
+      .openapi({ param: { name: 'model', in: 'query' }, description: 'Filter exact printer model' }),
+    printerId: z
+      .string()
+      .optional()
+      .openapi({ param: { name: 'printerId', in: 'query' }, description: 'Filter exact printer ID' }),
+    month: z
+      .string()
+      .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month harus berformat YYYY-MM')
+      .optional()
+      .openapi({ param: { name: 'month', in: 'query' }, description: 'Filter bulan pengukuran (YYYY-MM), waktu kalender Asia/Jakarta', example: '2026-10' }),
+    sort: z
+      .enum([
+        'measuredAt',
+        'totalLabelCount',
+        'totalPrintLength',
+        'printheadOdometer',
+        'headUsage',
+        'ribbonLength',
+        'mediaLength'
+      ])
+      .optional()
+      .openapi({
+        param: { name: 'sort', in: 'query' },
+        description: 'Kolom numeric atau tanggal yang diurutkan',
+        example: 'measuredAt'
+      }),
+    direction: z
+      .enum(['asc', 'desc'])
+      .optional()
+      .openapi({ param: { name: 'direction', in: 'query' }, description: 'Arah pengurutan', example: 'desc' }),
   })
   .openapi('PrinterMeterGetQuery')
 
@@ -103,8 +154,15 @@ export const readingItemSchema = z
 
 export const getResponseDataSchema = z
   .object({
-    count: z.number().int().openapi({ description: 'Number of readings returned' }),
-    data: z.array(readingItemSchema).openapi({ description: 'Array of meter readings, newest first' }),
+    count: z.number().int().openapi({ description: 'Total readings matching filters across all pages' }),
+    data: z.array(readingItemSchema).openapi({ description: 'Readings for the requested page, newest first' }),
+    filters: z.object({
+      printheadIds: z.array(z.string()),
+      hasMissingPrinthead: z.boolean(),
+      ipAddresses: z.array(z.string()),
+      models: z.array(z.string()),
+      printerIds: z.array(z.string()),
+    }).openapi({ description: 'All distinct select-filter values, independent of active filters and pagination' }),
   })
   .openapi('PrinterMeterListData')
 
@@ -170,7 +228,7 @@ export const getRoute = createRoute({
   path: '/',
   tags: ['Printer Meter'],
   summary: 'Ambil reading terbaru',
-  description: 'Ambil N meter reading terbaru, urutkan dari terbaru ke terlama. Untuk testing & verifikasi.',
+  description: 'Ambil meter reading dengan filter printer, printhead, model, IP, dan bulan; mendukung pagination.',
   request: {
     query: getQuerySchema,
   },
@@ -192,6 +250,7 @@ export const getRoute = createRoute({
           schema: z.object({
             success: z.boolean().openapi({ example: false }),
             error: z.string(),
+            details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
           }),
         },
       },
@@ -210,4 +269,3 @@ export const getRoute = createRoute({
     },
   },
 })
-

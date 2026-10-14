@@ -165,8 +165,8 @@ Docker Compose juga menolak start bila `MYSQL_ROOT_PASSWORD` atau `MYSQL_PASSWOR
 | `GET` | `/docs` | Swagger UI (interaktif) |
 | `GET` | `/openapi.json` | OpenAPI 3.0 document |
 | `POST` | `/api/printer-meter` | Simpan reading printer |
-| `GET` | `/api/printer-meter?limit=20` | Baca reading terbaru |
-| `GET` | `/api/printhead-benchmark?limit=50&sort=head_usage_delta&head=PHxxx` | Baca benchmark count per printhead (olahan via SP) |
+| `GET` | `/api/printer-meter?page=1&limit=20` | Baca reading terbaru dengan filter printer/printhead/bulan dan pagination server-side |
+| `GET` | `/api/printhead-benchmark` | Baca benchmark count per printhead (filter model, sortir, paginasi server-side) |
 
 Semua response memakai envelope global:
 
@@ -179,6 +179,33 @@ atau saat error:
 ```json
 { "success": false, "error": "Validation failed", "details": [ ... ] }
 ```
+
+### Parameter Query Readings
+
+`GET /api/printer-meter` mendukung filter exact-match berikut; parameter filter kosong diabaikan:
+
+| Parameter | Default | Deskripsi |
+|---|---|---|
+| `page` | `1` | Halaman 1-based; harus bilangan bulat positif. |
+| `limit` | `20` | Ukuran halaman (1-100); nilai invalid/non-positif memakai default `20`, nilai di atas `100` dibatasi ke `100`. |
+| `printheadId` | omitted | Filter berdasarkan serial printhead. |
+| `printheadMissing` | omitted | Kirim `true` untuk hanya menampilkan reading tanpa printhead ID. |
+| `ipAddress` | omitted | Filter alamat IP printer. |
+| `model` | omitted | Filter model printer. |
+| `printerId` | omitted | Filter ID/serial printer. |
+| `month` | omitted | Bulan `measuredAt` dalam format `YYYY-MM`, dihitung sebagai bulan kalender Asia/Jakarta. |
+| `sort` | `measuredAt` | Kolom yang diurutkan: `measuredAt`, `totalLabelCount`, `totalPrintLength`, `printheadOdometer`, `headUsage`, `ribbonLength`, atau `mediaLength`. |
+| `direction` | `desc` | Arah sort: `asc` atau `desc`. |
+
+Contoh kombinasi filter dan halaman:
+
+```bash
+curl "http://localhost:3000/api/printer-meter?page=2&limit=20&model=ZT620&month=2026-10&sort=headUsage&direction=asc"
+```
+
+Kolom sortable pada UI meliputi `measuredAt` (waktu pengukuran) dan seluruh meter numerik. Header table memakai sorting manual/server-side, sehingga urutan benar untuk semua halaman. Default tanggal terbaru lebih dulu (`measuredAt`, `desc`); ties distabilkan dengan ID reading menurun.
+
+Response data berisi `count` total hasil setelah filter (semua halaman), `data` untuk halaman yang diminta, dan `filters` berisi pilihan unik lengkap (`printheadIds`, `ipAddresses`, `models`, `printerIds`, serta `hasMissingPrinthead`) yang tidak terpotong oleh halaman/filter aktif.
 
 Contoh POST development:
 
@@ -199,6 +226,70 @@ curl -X POST http://localhost:3000/api/printer-meter \
     }
   }'
 ```
+
+## Perintah API Benchmark
+
+```bash
+# Baca halaman pertama (50 baris), sortir default head_usage_delta desc.
+curl http://localhost:3000/api/printhead-benchmark
+
+# Halaman 2 dengan filter model.
+curl "http://localhost:3000/api/printhead-benchmark?page=2&limit=50&model=ZT620"
+
+# Sortir odometer_delta asc, 20 baris per halaman.
+curl "http://localhost:3000/api/printhead-benchmark?sort=odometer_delta&direction=asc&limit=20"
+
+# Filter satu printhead (legacy, tetap berjalan).
+curl "http://localhost:3000/api/printhead-benchmark?head=PH18D3402A001"
+```
+
+### Parameter Query
+
+| Parameter | Default | Deskripsi |
+|---|---|---|
+| `page` | `1` | Nomor halaman (1-based). Nilai non-integer atau non-positif → **400 Validation Error**. |
+| `limit` | `50` | Ukuran halaman. Omitted/invalid/non-positif → default `50`. Nilai `> 100` di-*cap* ke `100`. Maksimum `100`. |
+| `model` | omitted | Filter `lastModel` persis. Omitted/empty = semua model. |
+| `sort` | `head_usage_delta` | Kunci sortir (whitelist). Nilai di luar whitelist → default. **Hanya kolom numerik** yang diizinkan. |
+| `direction` | `desc` | Arah sortir: `asc` \| `desc`. Nilai lain → **400 Validation Error**. |
+| `head` | omitted | Filter `printheadId` persis (legacy). |
+
+**Kunci sort yang diizinkan** (semua numerik):
+
+| Kunci | Kolom |
+|---|---|
+| `reading_count` | `readingCount` |
+| `lifespan` | `lifespanMinutes` |
+| `head_usage_delta` | `headUsageDelta` |
+| `odometer_delta` | `printheadOdometerDelta` |
+| `total_label_count_delta` | `totalLabelCountDelta` |
+| `total_print_length_delta` | `totalPrintLengthDelta` |
+| `ribbon_length_delta` | `ribbonLengthDelta` |
+| `media_length_delta` | `mediaLengthDelta` |
+
+### Response Body
+
+```json
+{
+  "success": true,
+  "data": {
+    "count": 128,
+    "data": [ ... ],
+    "models": ["ZT620", "ZT410", "GK420t"]
+  }
+}
+```
+
+- **`count`** — total baris yang cocok dengan filter aktif (`head`, `model`) di **seluruh dataset**, bukan hanya halaman ini.
+- **`data`** — hanya baris pada halaman yang diminta.
+- **`models`** — semua nilai `lastModel` unik non-null dari seluruh dataset (tidak dipengaruhi filter halaman/model).
+
+### Error 400 (Validation Failed)
+
+```json
+{ "success": false, "error": "Validation failed", "details": [{ "path": "page", "message": "page harus bilangan bulat positif" }] }
+```
+
 
 ## Perintah
 

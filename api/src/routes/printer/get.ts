@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, isNull, lt } from 'drizzle-orm'
 import { db } from '../../db/client'
 import { meterReadings, printers } from '../../db/schema'
 import { createOpenAPIApp } from '@config/api-response'
@@ -17,38 +17,103 @@ function parseLimit(raw: GetQuery['limit']): number {
   return Math.min(Math.floor(n), 100)
 }
 
+function getJakartaMonthRange(month: string): { start: Date, end: Date } {
+  const [year, monthNumber] = month.split('-').map(Number)
+  const jakartaOffsetMs = 7 * 60 * 60 * 1000
+  const start = new Date(0)
+  start.setUTCFullYear(year, monthNumber - 1, 1)
+  start.setUTCHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setUTCMonth(end.getUTCMonth() + 1)
+
+  return {
+    start: new Date(start.getTime() - jakartaOffsetMs),
+    end: new Date(end.getTime() - jakartaOffsetMs)
+  }
+}
+
 // ============================================================
-// GET /api/printer-meter?limit=N — reading terbaru
+// GET /api/printer-meter — filtered and paginated readings
 // ============================================================
 app.openapi(getRoute, async (c) => {
-  const { limit: limitStr } = c.req.valid('query') as GetQuery
+  const query = c.req.valid('query') as GetQuery
+  const { limit: limitStr } = query
   const limit = parseLimit(limitStr)
+  const page = query.page ? Number(query.page) : 1
+  const month = query.month?.trim()
+  const sortKey = query.sort ?? 'measuredAt'
+  const direction = query.direction ?? 'desc'
+  const filters = []
+  const sortColumns = {
+    measuredAt: meterReadings.measuredAt,
+    totalLabelCount: meterReadings.totalLabelCount,
+    totalPrintLength: meterReadings.totalPrintLength,
+    printheadOdometer: meterReadings.printheadOdometer,
+    headUsage: meterReadings.headUsage,
+    ribbonLength: meterReadings.ribbonLength,
+    mediaLength: meterReadings.mediaLength
+  } as const
+  const sortColumn = sortColumns[sortKey]
+  const orderBy = direction === 'asc' ? asc(sortColumn) : desc(sortColumn)
+
+  if (query.printheadMissing === 'true') {
+    filters.push(isNull(meterReadings.printheadId))
+  } else if (query.printheadId?.trim()) {
+    filters.push(eq(meterReadings.printheadId, query.printheadId.trim()))
+  }
+  if (query.ipAddress?.trim()) filters.push(eq(printers.ipAddress, query.ipAddress.trim()))
+  if (query.model?.trim()) filters.push(eq(printers.model, query.model.trim()))
+  if (query.printerId?.trim()) filters.push(eq(printers.printerId, query.printerId.trim()))
+  if (month) {
+    const range = getJakartaMonthRange(month)
+    filters.push(gte(meterReadings.measuredAt, range.start), lt(meterReadings.measuredAt, range.end))
+  }
+  const where = and(...filters)
 
   try {
-    const rows = await db
-      .select({
-        id: meterReadings.id,
-        printerId: printers.printerId,
-        model: printers.model,
-        ipAddress: printers.ipAddress,
-        measuredAt: meterReadings.measuredAt,
-        collectorHostname: meterReadings.collectorHostname,
-        collectorIp: meterReadings.collectorIp,
-        printheadId: meterReadings.printheadId,
-        totalLabelCount: meterReadings.totalLabelCount,
-        totalPrintLength: meterReadings.totalPrintLength,
-        printheadOdometer: meterReadings.printheadOdometer,
-        headUsage: meterReadings.headUsage,
-        ribbonLength: meterReadings.ribbonLength,
-        mediaLength: meterReadings.mediaLength,
-        rawMeters: meterReadings.rawMeters,
-        createdAt: meterReadings.createdAt,
-      })
-      .from(meterReadings)
-      .innerJoin(printers, eq(meterReadings.printerId, printers.id))
-      // Ambil N reading termuda, lalu tampilkan terbaru di atas.
-      .orderBy(desc(meterReadings.measuredAt))
-      .limit(limit)
+    const [rows, [{ value: total }], printheadRows, ipRows, modelRows, printerRows] = await Promise.all([
+      db
+        .select({
+          id: meterReadings.id,
+          printerId: printers.printerId,
+          model: printers.model,
+          ipAddress: printers.ipAddress,
+          measuredAt: meterReadings.measuredAt,
+          collectorHostname: meterReadings.collectorHostname,
+          collectorIp: meterReadings.collectorIp,
+          printheadId: meterReadings.printheadId,
+          totalLabelCount: meterReadings.totalLabelCount,
+          totalPrintLength: meterReadings.totalPrintLength,
+          printheadOdometer: meterReadings.printheadOdometer,
+          headUsage: meterReadings.headUsage,
+          ribbonLength: meterReadings.ribbonLength,
+          mediaLength: meterReadings.mediaLength,
+          rawMeters: meterReadings.rawMeters,
+          createdAt: meterReadings.createdAt,
+        })
+        .from(meterReadings)
+        .innerJoin(printers, eq(meterReadings.printerId, printers.id))
+        .where(where)
+        .orderBy(orderBy, desc(meterReadings.id))
+        .limit(limit)
+        .offset((page - 1) * limit),
+      db
+        .select({ value: count() })
+        .from(meterReadings)
+        .innerJoin(printers, eq(meterReadings.printerId, printers.id))
+        .where(where),
+      db.selectDistinct({ value: meterReadings.printheadId })
+        .from(meterReadings),
+      db.selectDistinct({ value: printers.ipAddress })
+        .from(meterReadings)
+        .innerJoin(printers, eq(meterReadings.printerId, printers.id)),
+      db.selectDistinct({ value: printers.model })
+        .from(meterReadings)
+        .innerJoin(printers, eq(meterReadings.printerId, printers.id)),
+      db.selectDistinct({ value: printers.printerId })
+        .from(meterReadings)
+        .innerJoin(printers, eq(meterReadings.printerId, printers.id)),
+    ])
 
     // Serialize Date -> ISO string agar sesuai schema response.
     const data = rows.map((row) => ({
@@ -61,8 +126,15 @@ app.openapi(getRoute, async (c) => {
       {
         success: true,
         data: {
-          count: data.length,
+          count: total,
           data,
+          filters: {
+            printheadIds: printheadRows.flatMap((row) => row.value ? [row.value] : []).sort(),
+            hasMissingPrinthead: printheadRows.some((row) => row.value === null),
+            ipAddresses: ipRows.map((row) => row.value).sort(),
+            models: modelRows.map((row) => row.value).sort(),
+            printerIds: printerRows.map((row) => row.value).sort(),
+          },
         },
       },
       200,

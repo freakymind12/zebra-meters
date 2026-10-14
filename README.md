@@ -47,6 +47,14 @@ ZebraMeter/
 │   ├── delete-scheduler.*    # Hapus Task Scheduler
 │   └── README.md             # 📖 Dokumentasi lengkap client
 │
+├── frontend/                 # Dashboard web — Nuxt 4 + Nuxt UI v4
+│   ├── app/
+│   │   ├── components/       # BenchmarkTable.vue, ReadingsTable.vue, dll.
+│   │   ├── composables/      # useZebraApi.ts (client API + formatter)
+│   │   ├── pages/            # index.vue (dashboard)
+│   │   └── types/            # api.ts (tipe mirror OpenAPI)
+│   └── README.md             # 📖 Dokumentasi frontend (setup & kontrol tabel)
+│
 ├── docs/                     # Dokumentasi desain (drawio, dll.)
 └── README.md                 # Dokumentasi umum (file ini)
 ```
@@ -117,10 +125,14 @@ Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [
 | `GET` | `/docs` | Swagger UI (interaktif) |
 | `GET` | `/openapi.json` | OpenAPI 3.0 document |
 | `POST` | `/api/printer-meter` | Terima data meter dari client (payload: `printerId`, `model`, `ipAddress`, `measuredAt`, `collectorHostname`, `collectorIp`, `printheadId`, `meters`, `rawMeters`) |
-| `GET` | `/api/printer-meter?limit=20` | Baca reading terbaru (untuk testing/verifikasi) |
+| `GET` | `/api/printer-meter?page=1&limit=20` | Baca reading terbaru dengan filter printer/printhead/bulan dan paginasi |
+| `GET` | `/api/printhead-benchmark?page=1&limit=50&model=&sort=head_usage_delta&direction=desc` | Benchmark count per printhead (filter model, sortir numerik, paginasi server-side) |
 
 - Endpoint **tanpa API key** — collector cukup menjangkau API.
 - Response memakai envelope global: `{ "success": true, "data": ... }` atau `{ "success": false, "error": ... }`. Sukses POST: `201 { "success": true, "data": { "id": <readingId>, ... } }`.
+- `/api/printhead-benchmark` mengembalikan `{ count, data, models }`: `count` adalah **total baris yang cocok dengan filter (seluruh halaman)**, `data` hanya baris pada halaman yang diminta, dan `models` berisi semua nilai `lastModel` unik untuk mengisi filter. Detail parameter dan contoh ada di [`api/README.md`](api/README.md).
+- Dashboard web Nuxt (`frontend/`) menampilkan tabel benchmark ini dengan **filter model** (`lastModel`, termasuk opsi default “Semua Model”), **sortir numerik via header kolom** (Readings, Lifespan, Head Usage Delta, Odometer Delta, Label Delta), dan **paginasi server-side** (default 50 baris; pilihan 20/50/100). Detail ada di [`frontend/README.md`](frontend/README.md).
+- Tabel Historical Readings menyediakan filter select untuk printhead, IP address, model, dan printer ID; pemilih bulan `measuredAt`; pagination server-side; serta sorting header server-side untuk tanggal dan seluruh nilai meter numerik. Endpoint mengembalikan total hasil terfilter dan opsi filter unik. Detail parameter ada di [`api/README.md`](api/README.md).
 
 ## Perintah API Berguna
 

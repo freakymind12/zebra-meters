@@ -13,18 +13,48 @@ export const benchmarkQuerySchema = z
         description: 'Filter 1 printhead_id (exact match)',
         example: 'PH18D3402A001',
       }),
+    page: z
+      .string()
+      .regex(/^[1-9]\d*$/, 'page harus bilangan bulat positif')
+      .optional()
+      .openapi({
+        param: { name: 'page', in: 'query' },
+        description: '1-based page number (default: 1)',
+        example: '1',
+      }),
+    limit: z
+      .string()
+      .optional()
+      .openapi({
+        param: { name: 'limit', in: 'query' },
+        description: 'Page size, 1-100 (default: 50)',
+        example: '50',
+      }),
+    model: z
+      .string()
+      .optional()
+      .openapi({
+        param: { name: 'model', in: 'query' },
+        description: 'Filter by exact lastModel',
+        example: 'ZT620',
+      }),
     sort: z
       .string()
       .optional()
       .openapi({
         param: { name: 'sort', in: 'query' },
-        description: 'Sortir: head_usage_delta | odometer_delta | lifespan | last_seen (default: head_usage_delta)',
+        description:
+          'Sort key: reading_count | lifespan | head_usage_delta | odometer_delta | total_label_count_delta | total_print_length_delta | ribbon_length_delta | media_length_delta (default: head_usage_delta)',
         example: 'head_usage_delta',
       }),
-    limit: z
-      .string()
+    direction: z
+      .enum(['asc', 'desc'])
       .optional()
-      .openapi({ param: { name: 'limit', in: 'query' }, description: 'Jumlah baris (1-100)', example: '20' }),
+      .openapi({
+        param: { name: 'direction', in: 'query' },
+        description: 'Sort direction: asc | desc (default: desc)',
+        example: 'desc',
+      }),
   })
   .openapi('PrintheadBenchmarkGetQuery')
 
@@ -70,8 +100,14 @@ export const benchmarkItemSchema = z
 
 export const benchmarkListDataSchema = z
   .object({
-    count: z.number().int().openapi({ description: 'Jumlah baris' }),
-    data: z.array(benchmarkItemSchema).openapi({ description: 'Agregat per printhead' }),
+    count: z
+      .number()
+      .int()
+      .openapi({ description: 'Total baris yang cocok dengan filter (seluruh halaman)' }),
+    data: z.array(benchmarkItemSchema).openapi({ description: 'Hanya baris pada halaman yang diminta' }),
+    models: z
+      .array(z.string())
+      .openapi({ description: 'Semua nilai lastModel unik (non-null) untuk pilihan filter' }),
   })
   .openapi('PrintheadBenchmarkListData')
 
@@ -97,6 +133,18 @@ export const benchmarkRoute = createRoute({
         },
       },
       description: 'Daftar benchmark printhead',
+    },
+    400: {
+      content: {
+        'application/json': {
+          schema: z.object({
+            success: z.boolean().openapi({ example: false }),
+            error: z.string().openapi({ example: 'Validation failed' }),
+            details: z.array(z.object({ path: z.string(), message: z.string() })).optional(),
+          }),
+        },
+      },
+      description: 'Parameter query tidak valid (page/direction)',
     },
     500: {
       content: {

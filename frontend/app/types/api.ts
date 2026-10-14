@@ -33,6 +33,13 @@ export interface PrinterMeterReading {
 export interface PrinterMeterListData {
   count: number
   data: PrinterMeterReading[]
+  filters: {
+    printheadIds: string[]
+    hasMissingPrinthead: boolean
+    ipAddresses: string[]
+    models: string[]
+    printerIds: string[]
+  }
 }
 
 // --- printhead-benchmark ---
@@ -72,6 +79,7 @@ export interface PrintheadBenchmark {
 export interface BenchmarkListData {
   count: number
   data: PrintheadBenchmark[]
+  models: string[]
 }
 
 // --- envelope ---
