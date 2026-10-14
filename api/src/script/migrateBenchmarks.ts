@@ -1,10 +1,9 @@
 /**
- * migrateBenchmarks.ts — runner migrasi idempoten 0001 + SP.
+ * migrateBenchmarks.ts — runner idempoten untuk SP + EVENT trigger.
  *
- * Alasan ada script ini: folder api/drizzle/ sebelumnya tidak ada
- * (DB dev dibuat via `db:push`), sehingga `db:generate` menghasilkan
- * baseline 0000 yang me-CREATE ulang tabel lama. Script ini hanya
- * menjalankan file inkremental 0001 (aman diulang) + SP.
+ * Script ini hanya menerapkan stored procedure dan event scheduler
+ * ke database. Tabel diasumsikan sudah ada (via `db:push` atau
+ * migration lain).
  *
  * Jalankan dari folder `api/`: bun src/script/migrateBenchmarks.ts
  */
@@ -15,31 +14,8 @@ import { createPool } from 'mysql2/promise'
 import { dbConfig } from '../config/env'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const MIGRATION_FILE = join(here, '..', '..', 'drizzle', '0001_printhead_benchmarks.sql')
 const SP_FILE = join(here, '..', 'db', 'procedures', 'sp_refresh_printhead_benchmarks.sql')
 const EVENT_FILE = join(here, '..', 'db', 'procedures', 'ev_refresh_printhead_benchmarks.sql')
-
-function splitSql(source: string): string[] {
-  // Statement dipisah oleh ";\n" pada awal baris logis — pola drizzle:
-  // statement diakhiri ";" di ujung baris, lalu statement berikutnya
-  // di baris baru. Komentar "--" & baris kosong dilewati.
-  const lines = source.split(/\r?\n/)
-  const out: string[] = []
-  let buf: string[] = []
-  const flush = () => {
-    const stmt = buf.join('\n').trim().replace(/;$/, '').trim()
-    buf = []
-    if (stmt !== '' && !stmt.startsWith('--')) out.push(stmt)
-  }
-  for (const rawLine of lines) {
-    const trimmed = rawLine.trim()
-    if (trimmed === '' || trimmed.startsWith('--')) continue
-    buf.push(rawLine)
-    if (trimmed.endsWith(';')) flush()
-  }
-  flush()
-  return out
-}
 
 function splitSp(source: string): string[] {
   const lines = source.split(/\r?\n/)
@@ -85,18 +61,6 @@ async function main(): Promise<void> {
   })
 
   try {
-    const migration = readFileSync(MIGRATION_FILE, 'utf8')
-    for (const stmt of splitSql(migration)) {
-      try {
-        await pool.query(stmt)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        if (/Duplicate key name|already exists/i.test(message)) continue
-        throw error
-      }
-    }
-    console.log('✅ Migration 0001 applied: printhead_benchmarks')
-
     // MySQL 8.4 tidak mendukung CREATE INDEX IF NOT EXISTS —
     // error duplikat diabaikan agar idempoten.
     const sp = readFileSync(SP_FILE, 'utf8')

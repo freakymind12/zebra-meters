@@ -35,10 +35,12 @@ RUN bun install --frozen-lockfile
 # --------------------------------------------------
 COPY src ./src
 COPY drizzle.config.ts tsconfig.json ./
+COPY drizzle ./drizzle
 
 # --------------------------------------------------
 # 3) Runtime
-#    - drizzle-kit push : bikin/sinkronkan tabel (idempoten)
+#    - drizzle-kit migrate : apply migration SQL dari folder drizzle/ (deterministik,
+#      ter-track oleh journal meta/_journal.json — aman untuk production)
 #    - bun src/index.ts : jalankan server Hono (auto-serve)
 # --------------------------------------------------
 ENV PORT=3000 \
@@ -46,4 +48,4 @@ ENV PORT=3000 \
 
 EXPOSE 3000
 
-CMD ["sh", "-c", "bunx drizzle-kit push && bun run start"]
+CMD ["sh", "-c", "bunx drizzle-kit migrate && bun run start"]

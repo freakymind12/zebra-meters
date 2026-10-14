@@ -10,8 +10,10 @@ node_modules/
 !.env.example
 !.env.production.example
 
-# Drizzle artifacts
-drizzle/
+# Drizzle artifacts — JANGAN ignore folder `drizzle/`!
+# Folder ini berisi migration SQL (hasil `bun run db:generate`) dan
+# journal `meta/_journal.json` yang WAJIB ter-commit ke Git agar
+# `bun run db:migrate` bisa berjalan di production.
 
 # Runtime logs
 *.log

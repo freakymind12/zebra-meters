@@ -210,14 +210,45 @@ curl -X POST http://localhost:3000/api/printer-meter \
 | `bun run typecheck` | Type-check TypeScript |
 | `bun run dev:db` | Jalankan MySQL + phpMyAdmin development |
 | `bun run dev:db:down` | Stop MySQL + phpMyAdmin development |
-| `bun run db:push` | Sinkronkan schema langsung ke database |
-| `bun run db:generate` | Generate migration SQL |
-| `bun run db:migrate` | Jalankan migration |
+| `bun run db:push` | Sinkronkan schema langsung ke database (hanya untuk development) |
+| `bun run db:generate` | Generate migration SQL ke folder `drizzle/` (commit ke Git!) |
+| `bun run db:migrate:dev` | Jalankan migration ke database development (`.env`) |
+| `bun run db:migrate:prod` | Jalankan migration dengan koneksi database production (`.env.production`) |
 | `bun run db:studio` | Buka Drizzle Studio |
+
+## Migrations (Drizzle Kit)
+
+Folder `drizzle/` berisi migration SQL dan **wajib di-commit ke Git** (tidak di-ignore).
+
+### Development
+
+Iterasi cepat saat development boleh memakai `push` (langsung sinkron tanpa file migration):
+
+```powershell
+bun run db:push
+```
+
+Namun untuk perubahan yang ingin direkam versinya, gunakan generate + migrate:
+
+```powershell
+bun run db:generate          # buat file SQL di drizzle/ dari src/db/schema.ts
+bun run db:migrate:dev       # apply migration ke DB development (.env)
+```
+
+### Production
+
+Jangan pakai `push` di production. Gunakan migration yang ter-track:
+
+```bash
+bun run db:migrate:prod      # apply migration ke DB production (.env.production)
+```
+
+Selain itu, container API otomatis menjalankan `drizzle-kit migrate` saat start (lihat `Dockerfile` CMD), sehingga migration yang sudah di-commit akan ter-apply saat deploy.
 
 ## Catatan Keamanan
 
 - Endpoint ingest sengaja **tanpa API key** — collector hanya perlu menjangkau API. Batasi akses lewat firewall/segmentasi jaringan.
 - API saat ini melayani HTTP tanpa TLS. Untuk jaringan yang tidak sepenuhnya dipercaya, gunakan Caddy/nginx sebagai reverse proxy HTTPS di VM.
-- Container menjalankan `drizzle-kit push` saat startup. Backup volume MySQL sebelum deploy perubahan schema yang berpotensi destruktif.
+- Container menjalankan `drizzle-kit migrate` saat startup — bukan `push`. Migration SQL di folder `drizzle/` ikut ter-commit ke Git dan tersedia di dalam image, sehingga perubahan schema ter-track versinya dan bersifat deterministik. Workflow: ubah `src/db/schema.ts` → `bun run db:generate` → review & commit file SQL di `drizzle/` → deploy (migration dijalankan otomatis saat container start) atau manual dengan `bun run db:migrate:prod`.
+- Backup volume MySQL sebelum deploy perubahan schema yang berpotensi destruktif.
 - `certs/zscaler-root-ca.crt` hanya dipakai saat build image agar `bun install` bekerja pada jaringan dengan TLS inspection; bukan sertifikat HTTPS API.

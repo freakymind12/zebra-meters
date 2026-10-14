@@ -130,7 +130,7 @@ Detail lengkap (validasi env, SSH tunnel phpMyAdmin, update deployment) ada di [
 | `bun run typecheck` | Type-check TypeScript |
 | `bun run db:push` | Sinkronkan schema → database (dev) |
 | `bun run db:generate` | Buat file migration SQL dari perubahan schema |
-| `bun run db:migrate` | Jalankan migration |
+| `bun run db:migrate:dev` | Jalankan migration ke DB development |
 | `bun run db:studio` | Buka Drizzle Studio (browse data) |
 
 ## Database Schema (Drizzle)
@@ -142,7 +142,7 @@ Dua tabel di `api/src/db/schema.ts`:
   - kolom split per meter (`totalLabelCount`, `totalPrintLength`, `printheadOdometer`, `headUsage`, `ribbonLength`, `mediaLength`) → memudahkan query operasional;
   - kolom `rawMeters` (JSON) → **source of truth** payload asli dari client, termasuk raw string & error per meter.
 
-> Jika menambah meter baru di `clients/config.json`, tambahkan kolomnya di `schema.ts` lalu jalankan `bun run db:generate` + `bun run db:migrate`. Sampai itu dilakukan, data meter baru tetap aman tersimpan di kolom `rawMeters`.
+> Jika menambah meter baru di `clients/config.json`, tambahkan kolomnya di `schema.ts` lalu jalankan `bun run db:generate` + `bun run db:migrate:dev`. Sampai itu dilakukan, data meter baru tetap aman tersimpan di kolom `rawMeters`.
 
 ## Tech Stack
 

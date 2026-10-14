@@ -14,8 +14,8 @@ node_modules
 *.tmp
 .tlsdiag.js
 
-# Drizzle artifacts
-drizzle
+# Drizzle migration files TIDAK di-exclude — dibutuhkan di dalam
+# image agar `drizzle-kit migrate` dapat berjalan saat container start.
 
 # Docker / compose files (tidak perlu jadi konteks build)
 Dockerfile
