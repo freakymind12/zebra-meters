@@ -22,6 +22,7 @@ const printheadFilter = ref(ALL_FILTERS_VALUE)
 const ipAddressFilter = ref(ALL_FILTERS_VALUE)
 const modelFilter = ref(ALL_FILTERS_VALUE)
 const printerIdFilter = ref(ALL_FILTERS_VALUE)
+const hostnameFilter = ref(ALL_FILTERS_VALUE)
 const selectedMonth = ref<DateValue>()
 const monthPickerOpen = ref(false)
 const sorting = ref<SortingState>([{ id: 'measuredAt', desc: true }])
@@ -33,7 +34,8 @@ const filterOptions = ref<PrinterMeterListData['filters']>({
   hasMissingPrinthead: false,
   ipAddresses: [],
   models: [],
-  printerIds: []
+  printerIds: [],
+  hostnames: []
 })
 const pending = ref(false)
 const error = ref<string | null>(null)
@@ -87,6 +89,10 @@ async function load() {
         printerIdFilter.value !== ALL_FILTERS_VALUE
           ? printerIdFilter.value
           : undefined,
+      hostname:
+        hostnameFilter.value !== ALL_FILTERS_VALUE
+          ? hostnameFilter.value
+          : undefined,
       month: monthQuery.value,
       sort: sortKey.value,
       direction: sortDirection.value
@@ -118,7 +124,7 @@ function configureAutoRefresh() {
 }
 
 watch(
-  [limit, printheadFilter, ipAddressFilter, modelFilter, printerIdFilter, selectedMonth, sorting],
+  [limit, printheadFilter, ipAddressFilter, modelFilter, printerIdFilter, hostnameFilter, selectedMonth, sorting],
   () => {
     if (page.value !== 1) {
       page.value = 1
@@ -163,6 +169,9 @@ const modelItems = computed(() =>
 const printerIdItems = computed(() =>
   filterItems('Semua Printer ID', filterOptions.value.printerIds)
 )
+const hostnameItems = computed(() =>
+  filterItems('Semua Hostname', filterOptions.value.hostnames)
+)
 
 function clearMonth() {
   selectedMonth.value = undefined
@@ -204,6 +213,11 @@ const columns: TableColumn<PrinterMeterReading>[] = [
   },
   { accessorKey: 'printerId', header: 'Printer ID' },
   { accessorKey: 'model', header: 'Model' },
+  {
+    accessorKey: 'collectorHostname',
+    header: 'Hostname',
+    cell: ({ row }) => row.original.collectorHostname ?? '-'
+  },
   { accessorKey: 'ipAddress', header: 'IP Address' },
   {
     accessorKey: 'printheadId',
@@ -293,6 +307,15 @@ const columns: TableColumn<PrinterMeterReading>[] = [
         size="xs"
         class="w-48"
         aria-label="Filter printer ID"
+      />
+      <USelect
+        v-model="hostnameFilter"
+        :items="hostnameItems"
+        value-key="value"
+        icon="i-lucide-monitor"
+        size="xs"
+        class="w-48"
+        aria-label="Filter hostname"
       />
       <UPopover v-model:open="monthPickerOpen">
         <UButton

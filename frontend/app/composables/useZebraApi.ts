@@ -39,6 +39,7 @@ export function useZebraApi() {
     ipAddress?: string
     model?: string
     printerId?: string
+    hostname?: string
     month?: string
     sort?: string
     direction?: 'asc' | 'desc'
@@ -51,6 +52,7 @@ export function useZebraApi() {
       ipAddress: opts.ipAddress,
       model: opts.model,
       printerId: opts.printerId,
+      hostname: opts.hostname,
       month: opts.month,
       sort: opts.sort,
       direction: opts.direction

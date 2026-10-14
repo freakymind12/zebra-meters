@@ -22,7 +22,7 @@ const option = computed<EChartsOption>(() => ({
   series: [
     {
       type: 'pie',
-      radius: '65%',
+      radius: '60%',
       data: props.data
     }
   ]

@@ -39,6 +39,7 @@ export interface PrinterMeterListData {
     ipAddresses: string[]
     models: string[]
     printerIds: string[]
+    hostnames: string[]
   }
 }
 

@@ -64,6 +64,7 @@ app.openapi(getRoute, async (c) => {
   if (query.ipAddress?.trim()) filters.push(eq(printers.ipAddress, query.ipAddress.trim()))
   if (query.model?.trim()) filters.push(eq(printers.model, query.model.trim()))
   if (query.printerId?.trim()) filters.push(eq(printers.printerId, query.printerId.trim()))
+  if (query.hostname?.trim()) filters.push(eq(meterReadings.collectorHostname, query.hostname.trim()))
   if (month) {
     const range = getJakartaMonthRange(month)
     filters.push(gte(meterReadings.measuredAt, range.start), lt(meterReadings.measuredAt, range.end))
@@ -71,7 +72,7 @@ app.openapi(getRoute, async (c) => {
   const where = and(...filters)
 
   try {
-    const [rows, [{ value: total }], printheadRows, ipRows, modelRows, printerRows] = await Promise.all([
+    const [rows, [{ value: total }], printheadRows, ipRows, modelRows, printerRows, hostnameRows] = await Promise.all([
       db
         .select({
           id: meterReadings.id,
@@ -113,6 +114,8 @@ app.openapi(getRoute, async (c) => {
       db.selectDistinct({ value: printers.printerId })
         .from(meterReadings)
         .innerJoin(printers, eq(meterReadings.printerId, printers.id)),
+      db.selectDistinct({ value: meterReadings.collectorHostname })
+        .from(meterReadings),
     ])
 
     // Serialize Date -> ISO string agar sesuai schema response.
@@ -134,6 +137,7 @@ app.openapi(getRoute, async (c) => {
             ipAddresses: ipRows.map((row) => row.value).sort(),
             models: modelRows.map((row) => row.value).sort(),
             printerIds: printerRows.map((row) => row.value).sort(),
+            hostnames: hostnameRows.flatMap((row) => row.value ? [row.value] : []).sort(),
           },
         },
       },

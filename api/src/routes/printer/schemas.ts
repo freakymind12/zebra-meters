@@ -89,6 +89,10 @@ export const getQuerySchema = z
       .string()
       .optional()
       .openapi({ param: { name: 'printerId', in: 'query' }, description: 'Filter exact printer ID' }),
+    hostname: z
+      .string()
+      .optional()
+      .openapi({ param: { name: 'hostname', in: 'query' }, description: 'Filter exact collector hostname' }),
     month: z
       .string()
       .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'month harus berformat YYYY-MM')
@@ -162,6 +166,7 @@ export const getResponseDataSchema = z
       ipAddresses: z.array(z.string()),
       models: z.array(z.string()),
       printerIds: z.array(z.string()),
+      hostnames: z.array(z.string()),
     }).openapi({ description: 'All distinct select-filter values, independent of active filters and pagination' }),
   })
   .openapi('PrinterMeterListData')
