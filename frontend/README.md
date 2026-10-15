@@ -73,7 +73,7 @@ Semua label antarmuka memakai Bahasa Indonesia agar konsisten dengan aplikasi.
 
 ## Deployment dengan Docker
 
-Nuxt SSR tetap dijalankan oleh Nitro/Node.js; Nginx digunakan sebagai reverse proxy di depannya, bukan untuk mengganti server Nuxt. Hanya Nginx yang membuka port ke host, sedangkan container Nuxt tidak mempublikasikan port. Nginx meneruskan request SSR/API ke Nitro dan menetapkan cache panjang untuk asset ber-hash pada `/_nuxt/`. Image Nuxt dibuat multi-stage: dependency dan build memakai Bun, sedangkan runtime hanya membawa `.output` dan Node.js. Container berjalan sebagai user non-root dan kedua service mempunyai health check HTTP.
+Nuxt SSR tetap dijalankan oleh Nitro/Node.js; Nginx berjalan sebagai reverse proxy di dalam image dan container yang sama. Hanya port Nginx yang dipublikasikan ke host. Nginx meneruskan request SSR/API ke Nitro di `127.0.0.1:3000` dan menetapkan cache panjang untuk asset ber-hash pada `/_nuxt/`. Image dibuat multi-stage: dependency dan build memakai Bun, sedangkan runtime membawa `.output`, Node.js, dan Nginx. Health check HTTP memeriksa aplikasi melalui Nginx.
 
 Compose frontend menggunakan external Docker network `zebrameter-net-prod` yang dibuat oleh deployment API (`api/docker-compose.yaml`). Deploy API lebih dahulu pada Docker host yang sama agar frontend dapat meneruskan request server-side ke service API bernama `api`.
 
@@ -83,15 +83,15 @@ Compose frontend menggunakan external Docker network `zebrameter-net-prod` yang 
 cd frontend
 docker compose -f docker-compose.yaml up -d --build
 docker compose -f docker-compose.yaml ps
-docker compose -f docker-compose.yaml logs -f frontend nginx
+docker compose -f docker-compose.yaml logs -f frontend
 ```
 
 Dashboard tersedia melalui Nginx di `http://localhost:3001`. Atur nilai berikut di environment shell sebelum menjalankan Compose untuk mengubah default:
 
 | Variable | Default | Keterangan |
 |---|---|---|
-| `FRONTEND_PORT` | `3001` | Port host yang dipetakan ke port `80` Nginx. |
-| `NUXT_API_BASE` | `http://api:3000` | Alamat API yang dapat dijangkau dari container Nuxt melalui Docker network. |
+| `FRONTEND_PORT` | `3001` | Port host yang dipetakan ke port `80` Nginx di container frontend. |
+| `NUXT_API_BASE` | `http://api:3000` | Alamat API yang dapat dijangkau dari container frontend melalui Docker network. |
 | `TZ` | `Asia/Jakarta` | Zona waktu container. |
 
 Contoh:
@@ -101,13 +101,13 @@ FRONTEND_PORT=8081 NUXT_API_BASE=http://api:3000 \
   docker compose -f docker-compose.yaml up -d --build
 ```
 
-Compose memakai network internal `zebrameter-frontend-internal` antara Nginx dan Nuxt. Container Nuxt juga terhubung ke external `zebrameter-net-prod` agar dapat mencapai API `api:3000`; Nginx tidak terhubung ke network API. Jangan mengubah `NUXT_API_BASE` menjadi alamat `localhost`: di dalam container, alamat itu menunjuk ke container Nuxt sendiri. Untuk TLS, letakkan ingress/reverse proxy eksternal di depan port host Nginx atau konfigurasi terminasi TLS pada lapisan deployment Anda.
+Compose hanya membuat satu container `zebrameter-frontend` yang berisi Nuxt/Nitro dan Nginx. Keduanya berkomunikasi melalui loopback container; container frontend bergabung ke external network `zebrameter-net-prod` agar Nitro dapat mencapai API `api:3000`. Jangan mengubah `NUXT_API_BASE` menjadi alamat `localhost`: alamat itu menunjuk ke container frontend, bukan container API. Untuk TLS, letakkan ingress/reverse proxy eksternal di depan port host Nginx atau konfigurasi terminasi TLS pada lapisan deployment Anda.
 
 ### Jenkins pipeline
 
-Job Jenkins menggunakan **Pipeline script from SCM** dengan script path `frontend/Jenkinsfile`. Atur SCM branch job ke branch production yang disetujui; pipeline melakukan checkout, install dependency Bun terkunci, typecheck, lint, build image Nuxt, deploy Nuxt dan Nginx via Compose, menunggu health check kedua service, lalu melakukan smoke test HTTP melalui port Nginx.
+Job Jenkins menggunakan **Pipeline script from SCM** dengan script path `frontend/Jenkinsfile`. Atur SCM branch job ke branch production yang disetujui; pipeline melakukan checkout, build image (install dependency Bun terkunci, typecheck, lint, dan build dijalankan dalam tahap build Docker), deploy satu container frontend via Compose, menunggu health check HTTP melalui Nginx, lalu melakukan smoke test HTTP.
 
-Jenkins agent harus memiliki Bun, Docker Engine dengan Compose v2, `curl`, akses ke repository, dan memakai Docker host yang sama dengan API deployment. Docker network `zebrameter-net-prod` harus sudah ada. Tidak ada secret aplikasi yang diperlukan oleh pipeline frontend.
+Jenkins agent harus memiliki Docker Engine dengan Compose v2, `curl`, akses ke repository, dan memakai Docker host yang sama dengan API deployment. Bun tidak perlu dipasang di agent karena digunakan pada tahap build image. Docker network `zebrameter-net-prod` harus sudah ada. Tidak ada secret aplikasi yang diperlukan oleh pipeline frontend.
 
 Pipeline memakai port host `3001` dan API `http://api:3000` secara default. Bila perlu nilai berbeda, ubah environment `FRONTEND_PORT`/`NUXT_API_BASE` di `frontend/Jenkinsfile` agar konsisten dengan Compose. Compose manual juga menerima kedua nilai tersebut dari environment.
 

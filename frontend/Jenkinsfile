@@ -23,20 +23,6 @@ pipeline {
             }
         }
 
-        stage('Validate') {
-            steps {
-                dir('frontend') {
-                    sh '''
-                        set -eu
-                        bun --version
-                        bun install --frozen-lockfile
-                        bun run typecheck
-                        bun run lint
-                    '''
-                }
-            }
-        }
-
         stage('Build Image') {
             steps {
                 dir('frontend') {
@@ -53,24 +39,23 @@ pipeline {
                 dir('frontend') {
                     sh '''
                         set -eu
-                        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans frontend nginx
+                        docker compose -f "$COMPOSE_FILE" up -d --remove-orphans frontend
 
                         deadline=$(( $(date +%s) + HEALTH_TIMEOUT_SECONDS ))
                         while [ "$(date +%s)" -lt "$deadline" ]; do
-                            app_health=$(docker inspect --format '{{.State.Health.Status}}' zebrameter-frontend 2>/dev/null || echo missing)
-                            proxy_health=$(docker inspect --format '{{.State.Health.Status}}' zebrameter-frontend-nginx 2>/dev/null || echo missing)
-                            if [ "$app_health" = "healthy" ] && [ "$proxy_health" = "healthy" ]; then
+                            health=$(docker inspect --format '{{.State.Health.Status}}' zebrameter-frontend 2>/dev/null || echo missing)
+                            if [ "$health" = "healthy" ]; then
                                 echo "Frontend application and Nginx proxy are healthy"
                                 exit 0
                             fi
 
-                            echo "Waiting for health checks (frontend=$app_health, nginx=$proxy_health)"
+                            echo "Waiting for frontend health check (frontend=$health)"
                             sleep 5
                         done
 
                         echo "Frontend health check timed out"
                         docker compose -f "$COMPOSE_FILE" ps || true
-                        docker compose -f "$COMPOSE_FILE" logs --tail=100 frontend nginx || true
+                        docker compose -f "$COMPOSE_FILE" logs --tail=100 frontend || true
                         exit 1
                     '''
                 }

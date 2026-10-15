@@ -50,8 +50,8 @@ ZebraMeter/
 │   └── README.md             # 📖 Dokumentasi lengkap client
 │
 ├── frontend/                 # Dashboard web — Nuxt 4 + Nuxt UI v4
-│   ├── Dockerfile            # Multi-stage image Nuxt/Nitro production
-│   ├── docker-compose.yaml   # Nuxt/Nitro + Nginx pada network production
+│   ├── Dockerfile            # Multi-stage image Nuxt/Nitro + Nginx production
+│   ├── docker-compose.yaml   # Satu container frontend pada network production
 │   ├── nginx.conf            # Reverse proxy dan cache asset statis
 │   ├── Jenkinsfile           # Pipeline CI/CD frontend
 │   ├── app/
@@ -121,7 +121,7 @@ cd frontend
 docker compose -f docker-compose.yaml up -d --build
 ```
 
-Dashboard default tersedia di `http://localhost:3001` melalui Nginx. Nitro tetap menangani SSR dan mem-proxy API melalui `http://api:3000`. Pipeline Jenkins frontend menggunakan script path `frontend/Jenkinsfile`; persyaratan agent dan konfigurasi deployment dijelaskan di [`frontend/README.md`](frontend/README.md#deployment-dengan-docker).
+Dashboard default tersedia di `http://localhost:3001` melalui Nginx dalam satu container frontend. Nitro tetap menangani SSR dan mem-proxy API melalui `http://api:3000`. Pipeline Jenkins frontend menggunakan script path `frontend/Jenkinsfile`; persyaratan agent dan konfigurasi deployment dijelaskan di [`frontend/README.md`](frontend/README.md#deployment-dengan-docker).
 
 ## Environment
 
