@@ -66,7 +66,7 @@ const identity = computed(() => {
         v-if="reading"
         class="space-y-6"
       >
-        <div>
+        <div class="motion-safe:animate-rise-in motion-reduce:animate-soft-in">
           <p class="text-xs font-semibold text-highlighted uppercase mb-2">
             Identitas
           </p>
@@ -86,7 +86,7 @@ const identity = computed(() => {
           </dl>
         </div>
 
-        <div>
+        <div class="motion-safe:animate-rise-in motion-reduce:animate-soft-in motion-safe:[animation-delay:40ms]">
           <p class="text-xs font-semibold text-highlighted uppercase mb-2">
             Meter
           </p>
@@ -106,7 +106,7 @@ const identity = computed(() => {
           </div>
         </div>
 
-        <div>
+        <div class="motion-safe:animate-rise-in motion-reduce:animate-soft-in motion-safe:[animation-delay:80ms]">
           <p class="text-xs font-semibold text-highlighted uppercase mb-2">
             Raw Meters
           </p>

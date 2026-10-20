@@ -1,6 +1,8 @@
 export interface PieChartDatum {
   name: string
   value: number
+  /** Hostname collector yang pernah melihat entitas ini (opsional). */
+  hostnames?: string[]
 }
 
 export interface ChartYAxis {
@@ -17,4 +19,13 @@ export interface BarLineChartSeries {
   color?: string
   smooth?: boolean
   stack?: string
+}
+
+/**
+ * Anotasi yang digambar vertikal di dalam batang: model printer (label)
+ * dan printhead ID (sublabel). Menggantikan label nilai & label sumbu X.
+ */
+export interface BarAnnotation {
+  label: string
+  sublabel?: string
 }

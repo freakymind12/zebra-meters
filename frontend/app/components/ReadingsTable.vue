@@ -368,18 +368,19 @@ const columns: TableColumn<PrinterMeterReading>[] = [
       </UButton>
       <span
         v-if="lastUpdated"
-        class="text-xs text-muted"
+        class="text-xs tabular-nums text-muted"
       >
         Diperbarui {{ formatDateTime(lastUpdated.toISOString()) }}
       </span>
       <span
         v-if="!error"
-        class="text-xs text-muted"
+        class="text-xs tabular-nums text-muted"
       > {{ total }} baris </span>
     </div>
 
     <UAlert
       v-if="error"
+      class="motion-safe:animate-rise-in motion-reduce:animate-soft-in"
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"

@@ -53,7 +53,7 @@ const currentYear = new Date().getFullYear()
         <NuxtLink
           to="/"
           aria-label="ZebraMeter, kembali ke beranda"
-          class="flex items-center gap-3 rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
+          class="flex items-center gap-3 rounded-md transition-transform duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
         >
           <svg
             class="size-7 text-primary sm:size-8"
@@ -108,7 +108,8 @@ const currentYear = new Date().getFullYear()
         <div class="flex items-center gap-4">
           <!-- Ticking Clock dibungkus ClientOnly agar tidak Hydration Error -->
           <ClientOnly>
-            <span class="hidden text-sm font-medium text-gray-500 dark:text-gray-400 lg:block">
+            <!-- tabular-nums mencegah lebar jam bergetar tiap detik -->
+            <span class="hidden text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400 lg:block">
               {{ formattedTime }}
             </span>
             <!-- Fallback saat loading di sisi server -->
@@ -136,7 +137,7 @@ const currentYear = new Date().getFullYear()
         <p class="text-sm text-gray-500 dark:text-gray-400">
           Created By <a
             href="#"
-            class="font-medium text-primary hover:underline"
+            class="font-medium text-primary transition-colors duration-150 ease-out hover:underline"
           >Rian Kurniawan (Using Free Tier LLM Model)</a>
         </p>
       </div>

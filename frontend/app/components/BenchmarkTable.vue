@@ -202,7 +202,7 @@ const columns: TableColumn<PrintheadBenchmark>[] = [
       </UButton>
       <span
         v-if="!error"
-        class="text-xs text-muted"
+        class="text-xs tabular-nums text-muted"
       >
         {{ total }} baris
       </span>
@@ -210,6 +210,7 @@ const columns: TableColumn<PrintheadBenchmark>[] = [
 
     <UAlert
       v-if="error"
+      class="motion-safe:animate-rise-in motion-reduce:animate-soft-in"
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"

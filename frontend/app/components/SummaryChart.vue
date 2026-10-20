@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { BarLineChartSeries, PieChartDatum } from '~/types/charts'
+import type { BarAnnotation, BarLineChartSeries, PieChartDatum } from '~/types/charts'
 import type { PrintheadBenchmark } from '~/types/api'
 
 const { fetchBenchmarks, fetchReadings } = useZebraApi()
@@ -45,11 +45,26 @@ async function fetchAllBenchmarks() {
 async function fetchPrinterUnitsByModel() {
   const firstPage = await fetchReadings({ page: 1, limit: PAGE_SIZE })
   const pageCount = Math.ceil(firstPage.count / PAGE_SIZE)
-  const printerModels = new Map<string, string>()
+  // printerId -> model + kumpulan hostname collector yang pernah melihatnya.
+  const printers = new Map<string, { model: string, hostnames: Set<string> }>()
 
   function collect(rows: typeof firstPage.data) {
     for (const reading of rows) {
-      printerModels.set(reading.printerId, reading.model)
+      const existing = printers.get(reading.printerId)
+
+      if (existing) {
+        existing.model = reading.model
+        if (reading.collectorHostname) {
+          existing.hostnames.add(reading.collectorHostname)
+        }
+      } else {
+        printers.set(reading.printerId, {
+          model: reading.model,
+          hostnames: new Set(
+            reading.collectorHostname ? [reading.collectorHostname] : []
+          )
+        })
+      }
     }
   }
 
@@ -59,13 +74,29 @@ async function fetchPrinterUnitsByModel() {
     collect(response.data)
   }
 
-  const counts = new Map<string, number>()
-  for (const model of printerModels.values()) {
-    counts.set(model, (counts.get(model) ?? 0) + 1)
+  const unitsByModel = new Map<string, { count: number, hostnames: Set<string> }>()
+  for (const printer of printers.values()) {
+    const entry = unitsByModel.get(printer.model)
+
+    if (entry) {
+      entry.count += 1
+      for (const hostname of printer.hostnames) {
+        entry.hostnames.add(hostname)
+      }
+    } else {
+      unitsByModel.set(printer.model, {
+        count: 1,
+        hostnames: new Set(printer.hostnames)
+      })
+    }
   }
 
-  return [...counts.entries()]
-    .map(([name, value]) => ({ name, value }))
+  return [...unitsByModel.entries()]
+    .map(([name, entry]) => ({
+      name,
+      value: entry.count,
+      hostnames: [...entry.hostnames].sort((a, b) => a.localeCompare(b))
+    }))
     .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
 }
 
@@ -119,6 +150,13 @@ const activePrintheadCategories = computed(() =>
   activePrintheads.value.map(benchmark => benchmark.printheadId)
 )
 
+const activePrintheadAnnotations = computed<BarAnnotation[]>(() =>
+  activePrintheads.value.map(benchmark => ({
+    label: benchmark.lastModel ?? 'Unknown model',
+    sublabel: benchmark.printheadId
+  }))
+)
+
 const activePrintheadSeries = computed<BarLineChartSeries[]>(() => [
   {
     name: 'Delta Label Count',
@@ -150,6 +188,13 @@ const bestHistoricalPrintheads = computed(() =>
 
 const bestHistoricalCategories = computed(() =>
   bestHistoricalPrintheads.value.map(benchmark => benchmark.printheadId)
+)
+
+const bestHistoricalAnnotations = computed<BarAnnotation[]>(() =>
+  bestHistoricalPrintheads.value.map(benchmark => ({
+    label: benchmark.lastModel ?? 'Unknown model',
+    sublabel: benchmark.printheadId
+  }))
 )
 
 const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
@@ -190,6 +235,7 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
 
     <UAlert
       v-if="error"
+      class="motion-safe:animate-rise-in motion-reduce:animate-soft-in"
       color="error"
       variant="subtle"
       icon="i-lucide-circle-alert"
@@ -198,23 +244,19 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
     />
 
     <ClientOnly v-else>
-      <div
-        v-if="pending && benchmarks.length === 0"
-        class="flex h-[320px] items-center justify-center text-sm text-muted"
-      >
-        Memuat chart...
-      </div>
+      <ChartSkeleton v-if="pending && benchmarks.length === 0" />
       <div
         v-else
         class="grid gap-4 lg:grid-cols-2"
       >
-        <div class="space-y-2">
+        <div class="space-y-2 motion-safe:animate-rise-in motion-reduce:animate-soft-in">
           <h3 class="text-sm font-medium text-highlighted">
             Printer Unit By Model
           </h3>
           <BasePieChart
             v-if="printerUnitsByModel.length"
             :data="printerUnitsByModel"
+            value-label="Printers"
           />
           <UEmpty
             v-else
@@ -223,13 +265,14 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
           />
         </div>
 
-        <div class="space-y-2">
+        <div class="space-y-2 motion-safe:animate-rise-in motion-reduce:animate-soft-in motion-safe:[animation-delay:60ms]">
           <h3 class="text-sm font-medium text-highlighted">
             Printhead Count By Printer Model
           </h3>
           <BasePieChart
             v-if="printheadsByModel.length"
             :data="printheadsByModel"
+            value-label="Printheads"
           />
           <UEmpty
             v-else
@@ -238,7 +281,7 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
           />
         </div>
 
-        <div class="space-y-2">
+        <div class="space-y-2 motion-safe:animate-rise-in motion-reduce:animate-soft-in motion-safe:[animation-delay:120ms]">
           <h3 class="text-sm font-medium text-highlighted">
             Active Printhead Metrics
           </h3>
@@ -246,6 +289,7 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
             v-if="activePrintheads.length"
             :categories="activePrintheadCategories"
             :series="activePrintheadSeries"
+            :bar-annotations="activePrintheadAnnotations"
             :y-axes="[
               { name: 'Label Count' },
               { name: 'Head Usage', unit: 'inches' }
@@ -258,7 +302,7 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
             description="Belum ada printhead dengan delta label count dan head usage."
           />
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 motion-safe:animate-rise-in motion-reduce:animate-soft-in motion-safe:[animation-delay:180ms]">
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-medium text-highlighted">
               Best Historical Printhead Usage
@@ -277,6 +321,7 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
             v-if="bestHistoricalPrintheads.length"
             :categories="bestHistoricalCategories"
             :series="bestHistoricalSeries"
+            :bar-annotations="bestHistoricalAnnotations"
             :y-axes="[
               { name: 'Label Count' },
               { name: 'Lifespan', unit: 'days' }
@@ -291,11 +336,7 @@ const bestHistoricalSeries = computed<BarLineChartSeries[]>(() => [
         </div>
       </div>
       <template #fallback>
-        <div
-          class="flex h-[320px] items-center justify-center text-sm text-muted"
-        >
-          Memuat chart...
-        </div>
+        <ChartSkeleton />
       </template>
     </ClientOnly>
   </section>
