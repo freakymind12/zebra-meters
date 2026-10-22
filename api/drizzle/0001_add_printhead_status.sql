@@ -1,0 +1,2 @@
+ALTER TABLE `printhead_benchmarks` ADD `status` enum('ACTIVE','INACTIVE') DEFAULT 'ACTIVE' NOT NULL;--> statement-breakpoint
+CREATE INDEX `printhead_bm_status_idx` ON `printhead_benchmarks` (`status`);

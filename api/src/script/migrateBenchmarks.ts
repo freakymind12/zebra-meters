@@ -14,7 +14,12 @@ import { createPool } from 'mysql2/promise'
 import { dbConfig } from '../config/env'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const SP_FILE = join(here, '..', 'db', 'procedures', 'sp_refresh_printhead_benchmarks.sql')
+// Urutan penting: flag SP dipasang dulu, karena
+// `sp_refresh_printhead_benchmarks` men-CALL-nya di akhir proses.
+const PROCEDURE_FILES = [
+  join(here, '..', 'db', 'procedures', 'sp_flag_printhead_status.sql'),
+  join(here, '..', 'db', 'procedures', 'sp_refresh_printhead_benchmarks.sql'),
+]
 const EVENT_FILE = join(here, '..', 'db', 'procedures', 'ev_refresh_printhead_benchmarks.sql')
 
 function splitSp(source: string): string[] {
@@ -63,17 +68,42 @@ async function main(): Promise<void> {
   try {
     // MySQL 8.4 tidak mendukung CREATE INDEX IF NOT EXISTS —
     // error duplikat diabaikan agar idempoten.
-    const sp = readFileSync(SP_FILE, 'utf8')
-    for (const stmt of splitSp(sp)) {
-      try {
-        await pool.query(stmt)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        if (/Duplicate key name|already exists/i.test(message)) continue
+    for (const procFile of PROCEDURE_FILES) {
+      const sp = readFileSync(procFile, 'utf8')
+      const statements = splitSp(sp)
+      for (const stmt of statements) {
+        try {
+          await pool.query(stmt)
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          if (/Duplicate key name|already exists/i.test(message)) continue
+          throw error
+        }
+      }
+      const name
+        = /CREATE\s+PROCEDURE\s+`([a-z_]+)`/i.exec(sp)?.[1] ?? procFile
+      console.log(`✅ SP applied: ${name} (${statements.length} statements)`)
+    }
+
+    // Re-flag awal semua head (backfill status; aman diulang —
+    // hanya baris yang statusnya berubah yang di-update).
+    try {
+      await pool.query(
+        'CALL sp_flag_printhead_status(NULL, NULL, NULL)',
+      )
+      console.log('✅ Flagged: sp_flag_printhead_status (ALL heads)')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (/Unknown column|doesn't exist|1146|1054/i.test(message)) {
+        console.warn(
+          '⚠️  Kolom `status` belum ada — jalankan migration drizzle dulu: '
+            + '`bun run db:push` (dev) atau `bun run db:migrate:prod`. '
+            + 'Flagging awal dilewati.',
+        )
+      } else {
         throw error
       }
     }
-    console.log('✅ SP applied: sp_refresh_printhead_benchmarks')
 
     // EVENT scheduler 15 menit (butuh event_scheduler=ON;
     // di Docker sudah via --event-scheduler=ON di compose).

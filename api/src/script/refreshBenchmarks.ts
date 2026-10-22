@@ -3,7 +3,8 @@
  *
  * Langkah:
  *   1. Pastikan tabel `printhead_benchmarks` ada (via `bun run db:push` dulu).
- *   2. Apply SP dari `src/db/procedures/sp_refresh_printhead_benchmarks.sql`
+ *   2. Apply SP dari `src/db/procedures/` (sp_flag_printhead_status +
+ *      sp_refresh_printhead_benchmarks)
  *      (parser DELIMITER $$ ... $$ + DELIMITER ;).
  *   3. CALL sp_refresh_printhead_benchmarks(filter, rebuild) lalu
  *      tampilkan ringkasan isi tabel.
@@ -24,7 +25,12 @@ import { createPool } from 'mysql2/promise'
 import { dbConfig } from '../config/env'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const SP_FILE = join(here, '..', 'db', 'procedures', 'sp_refresh_printhead_benchmarks.sql')
+// Flag SP dipasang lebih dulu — sp_refresh_printhead_benchmarks
+// men-CALL-nya di akhir untuk menghitung ulang kolom `status`.
+const PROCEDURE_FILES = [
+  join(here, '..', 'db', 'procedures', 'sp_flag_printhead_status.sql'),
+  join(here, '..', 'db', 'procedures', 'sp_refresh_printhead_benchmarks.sql'),
+]
 
 function parseArgs(argv: string[]): {
   head: string | null
@@ -100,12 +106,16 @@ async function main(): Promise<void> {
 
   try {
     // --- 1) Apply SP statement per statement ---
-    const source = readFileSync(SP_FILE, 'utf8')
-    const statements = splitStatements(source)
-    for (const stmt of statements) {
-      await pool.query(stmt)
+    for (const procFile of PROCEDURE_FILES) {
+      const source = readFileSync(procFile, 'utf8')
+      const statements = splitStatements(source)
+      for (const stmt of statements) {
+        await pool.query(stmt)
+      }
+      const name
+        = /CREATE\s+PROCEDURE\s+`([a-z_]+)`/i.exec(source)?.[1] ?? procFile
+      console.log(`✅ SP applied (${statements.length} statements): ${name}`)
     }
-    console.log(`✅ SP applied (${statements.length} statements): sp_refresh_printhead_benchmarks`)
 
     if (applyOnly) return
 
@@ -121,7 +131,8 @@ async function main(): Promise<void> {
     // --- 3) Ringkasan isi tabel ---
     const [rows] = await pool.query(
       'SELECT `printhead_id`, `reading_count`, `head_usage_delta`, ' +
-        '`printhead_odometer_delta`, `lifespan_minutes`, `updated_at` ' +
+        '`printhead_odometer_delta`, `lifespan_minutes`, `last_seen_at`, ' +
+        '`status`, `updated_at` ' +
         'FROM `printhead_benchmarks` ORDER BY `printhead_id`',
     )
     const list = rows as Array<Record<string, unknown>>
@@ -130,7 +141,8 @@ async function main(): Promise<void> {
       console.log(
         `  • ${r['printhead_id']} | readings=${r['reading_count']} | ` +
           `head_usageΔ=${r['head_usage_delta']} | odoΔ=${r['printhead_odometer_delta']} | ` +
-          `lifespan=${r['lifespan_minutes']} mnt`,
+          `lifespan=${r['lifespan_minutes']} mnt | seen=${r['last_seen_at']} | ` +
+          `status=${r['status']}`,
       )
     }
   } finally {

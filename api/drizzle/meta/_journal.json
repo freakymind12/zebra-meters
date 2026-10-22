@@ -8,6 +8,13 @@
       "when": 1791892452602,
       "tag": "0000_silky_malcolm_colcord",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1792652865678,
+      "tag": "0001_add_printhead_status",
+      "breakpoints": true
     }
   ]
 }

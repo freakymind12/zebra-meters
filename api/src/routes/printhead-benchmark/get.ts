@@ -125,6 +125,7 @@ app.openapi(benchmarkRoute, async (c) => {
       mediaLengthLast: r.mediaLengthLast,
       mediaLengthDelta: r.mediaLengthDelta,
       hasNegativeDelta: r.hasNegativeDelta,
+      status: r.status,
       updatedAt: r.updatedAt.toISOString(),
     }))
 

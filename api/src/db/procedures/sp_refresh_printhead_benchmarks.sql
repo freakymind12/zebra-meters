@@ -35,6 +35,9 @@
 --   * reading_count = COUNT(*) row valid per head.
 --   * lifespan_minutes = TIMESTAMPDIFF(MINUTE, first_seen, last_seen).
 --   * has_negative_delta = 1 bila ada delta < 0.
+--   * status (ACTIVE/INACTIVE) dihitung ulang di akhir prosedur
+--     via `sp_flag_printhead_status` (last_seen < 3 hari = ACTIVE,
+--     > 7 hari = INACTIVE, 3-7 hari buffer default ACTIVE).
 --
 -- Butuh MySQL 8 (window function ROW_NUMBER).
 -- Apply:
@@ -238,6 +241,14 @@ BEGIN
     `updated_at` = NOW(3);
 
   COMMIT;
+
+  -- ----------------------------------------------------------
+  -- Pemeliharaan lanjutan: status head (ACTIVE/INACTIVE) ikut
+  -- dihitung ulang tiap refresh — flagging tidur tak pernah telat.
+  -- Param threshold NULL = default SP (3 hari / 7 hari).
+  -- SP ini sudah di-COMMIT, jadi COMMIT di dalam flagger aman.
+  -- ----------------------------------------------------------
+  CALL `sp_flag_printhead_status`(v_filter, NULL, NULL);
 END $$
 
 DELIMITER ;

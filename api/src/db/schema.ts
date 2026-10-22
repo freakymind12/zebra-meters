@@ -3,6 +3,7 @@ import {
   double,
   int,
   json,
+  mysqlEnum,
   mysqlTable,
   index,
   timestamp,
@@ -212,6 +213,15 @@ export const printheadBenchmarks = mysqlTable(
     // (counter reset / odometer head di-nol-kan / serial dipakai ulang).
     hasNegativeDelta: boolean('has_negative_delta').notNull().default(false),
 
+    // Status pemeliharaan head — dihitung oleh SP `sp_flag_printhead_status`
+    // dari selisih `last_seen_at` vs waktu saat ini (bukan ditulis manual):
+    //   ACTIVE   : head masih terpantau baru-baru ini (selisih < 3 hari,
+    //              buffer 3-7 hari pun tetap ACTIVE),
+    //   INACTIVE : head sudah lama tidak muncul (selisih > 7 hari).
+    status: mysqlEnum('status', ['ACTIVE', 'INACTIVE'])
+      .notNull()
+      .default('ACTIVE'),
+
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().onUpdateNow().notNull(),
   },
@@ -220,6 +230,7 @@ export const printheadBenchmarks = mysqlTable(
     index('printhead_bm_last_seen_idx').on(table.lastSeenAt),
     index('printhead_bm_last_printer_idx').on(table.lastPrinterId),
     index('printhead_bm_updated_idx').on(table.updatedAt),
+    index('printhead_bm_status_idx').on(table.status),
   ],
 )
 

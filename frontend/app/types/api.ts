@@ -74,6 +74,8 @@ export interface PrintheadBenchmark {
   mediaLengthLast: number | null
   mediaLengthDelta: number | null
   hasNegativeDelta: boolean
+  /** Status pemeliharaan: ACTIVE (last_seen < 3 hari), INACTIVE (> 7 hari). */
+  status: 'ACTIVE' | 'INACTIVE'
   updatedAt: string
 }
 
