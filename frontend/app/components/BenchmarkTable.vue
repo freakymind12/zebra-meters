@@ -130,6 +130,11 @@ const columns: TableColumn<PrintheadBenchmark>[] = [
     cell: ({ row }) => row.original.lastModel ?? '-'
   },
   {
+    accessorKey: 'firstSeenAt',
+    header: 'First Seen',
+    cell: ({ row }) => formatDateTime(row.original.firstSeenAt)
+  },
+  {
     accessorKey: 'lastSeenAt',
     header: 'Last Seen',
     cell: ({ row }) => formatDateTime(row.original.lastSeenAt)

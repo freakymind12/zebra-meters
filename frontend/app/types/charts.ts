@@ -28,4 +28,6 @@ export interface BarLineChartSeries {
 export interface BarAnnotation {
   label: string
   sublabel?: string
+  /** Hostname collector yang terkait dengan bar ini (opsional, tampil di tooltip). */
+  hostnames?: string[]
 }

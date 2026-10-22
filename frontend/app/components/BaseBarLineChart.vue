@@ -108,8 +108,36 @@ type TooltipItem = {
   axisValueLabel?: string
   seriesName?: string
   seriesIndex: number
+  dataIndex?: number
   value?: unknown
   color?: string
+}
+
+const MAX_HOSTNAMES = 8
+
+// Hostname berasal dari API, jadi sama-sama di-escape sebelum masuk HTML tooltip.
+function hostnameSection(hostnames: string[], colors: ChartPalette): string {
+  const shown = hostnames.slice(0, MAX_HOSTNAMES)
+  const remaining = hostnames.length - shown.length
+  const chips = shown.map(hostname =>
+    '<span style="display:inline-block;padding:1px 6px;border-radius:4px;'
+    + `background:${colors.chip};color:${colors.text};font-size:11px;line-height:1.6">`
+    + `${escapeHtml(hostname)}</span>`
+  )
+
+  if (remaining > 0) {
+    chips.push(
+      '<span style="display:inline-block;padding:1px 6px;'
+      + `color:${colors.muted};font-size:11px;line-height:1.6">+${remaining} lainnya</span>`
+    )
+  }
+
+  return '<div style="margin-top:8px;padding-top:8px;'
+    + `border-top:1px solid ${colors.tooltipBorder}">`
+    + '<div style="margin-bottom:4px;font-size:11px;font-weight:600;'
+    + `color:${colors.muted}">Station (${hostnames.length})</div>`
+    + `<div style="display:flex;flex-wrap:wrap;gap:4px">${chips.join('')}</div>`
+    + '</div>'
 }
 
 function seriesLabel(colors: ChartPalette, show: boolean) {
@@ -260,10 +288,16 @@ function tooltipFormatter(colors: ChartPalette) {
     }).join('')
 
     const title = first.axisValueLabel ?? first.seriesName ?? ''
+    // Anotasi per-bar membawa hostnames: sama index-nya dengan kategori tooltip.
+    const annotation = first.dataIndex === undefined
+      ? undefined
+      : props.barAnnotations?.[first.dataIndex]
+    const hostnames = annotation?.hostnames ?? []
 
     return '<div style="min-width:200px;max-width:320px">'
       + `<div style="margin-bottom:6px;font-weight:600;color:${colors.text}">${escapeHtml(String(title))}</div>`
       + rows
+      + (hostnames.length ? hostnameSection(hostnames, colors) : '')
       + '</div>'
   }
 }

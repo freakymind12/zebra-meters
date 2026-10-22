@@ -21,6 +21,7 @@ const pending = ref(false)
 const error = ref<string | null>(null)
 const benchmarks = ref<PrintheadBenchmark[]>([])
 const printerUnitsByModel = ref<PieChartDatum[]>([])
+const collectorHostnamesByPrinthead = ref<Record<string, string[]>>({})
 const selectedModel = ref(ALL_MODELS_VALUE)
 const availableModels = ref<string[]>([])
 
@@ -42,11 +43,13 @@ async function fetchAllBenchmarks() {
   return { rows: result, models: firstPage.models }
 }
 
-async function fetchPrinterUnitsByModel() {
+async function fetchReadingSummary() {
   const firstPage = await fetchReadings({ page: 1, limit: PAGE_SIZE })
   const pageCount = Math.ceil(firstPage.count / PAGE_SIZE)
   // printerId -> model + kumpulan hostname collector yang pernah melihatnya.
   const printers = new Map<string, { model: string, hostnames: Set<string> }>()
+  // printheadId -> kumpulan hostname collector yang pernah melihat printhead tsb.
+  const hostnamesByPrinthead = new Map<string, Set<string>>()
 
   function collect(rows: typeof firstPage.data) {
     for (const reading of rows) {
@@ -64,6 +67,19 @@ async function fetchPrinterUnitsByModel() {
             reading.collectorHostname ? [reading.collectorHostname] : []
           )
         })
+      }
+
+      if (reading.printheadId && reading.collectorHostname) {
+        const hostnames = hostnamesByPrinthead.get(reading.printheadId)
+
+        if (hostnames) {
+          hostnames.add(reading.collectorHostname)
+        } else {
+          hostnamesByPrinthead.set(
+            reading.printheadId,
+            new Set([reading.collectorHostname])
+          )
+        }
       }
     }
   }
@@ -91,13 +107,24 @@ async function fetchPrinterUnitsByModel() {
     }
   }
 
-  return [...unitsByModel.entries()]
-    .map(([name, entry]) => ({
-      name,
-      value: entry.count,
-      hostnames: [...entry.hostnames].sort((a, b) => a.localeCompare(b))
-    }))
-    .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name))
+  const sortHostnames = (set: Set<string>) =>
+    [...set].sort((a, b) => a.localeCompare(b))
+
+  const collectorHostnamesByPrinthead: Record<string, string[]> = {}
+  for (const [printheadId, hostnames] of hostnamesByPrinthead) {
+    collectorHostnamesByPrinthead[printheadId] = sortHostnames(hostnames)
+  }
+
+  return {
+    unitsByModel: [...unitsByModel.entries()]
+      .map(([name, entry]) => ({
+        name,
+        value: entry.count,
+        hostnames: sortHostnames(entry.hostnames)
+      }))
+      .sort((a, b) => b.value - a.value || a.name.localeCompare(b.name)),
+    collectorHostnamesByPrinthead
+  }
 }
 
 let currentRequest = 0
@@ -108,14 +135,16 @@ async function load() {
   error.value = null
 
   try {
-    const [benchmarkResult, printerSummary] = await Promise.all([
+    const [benchmarkResult, readingSummary] = await Promise.all([
       fetchAllBenchmarks(),
-      fetchPrinterUnitsByModel()
+      fetchReadingSummary()
     ])
     if (requestId !== currentRequest) return
     benchmarks.value = benchmarkResult.rows
     availableModels.value = benchmarkResult.models
-    printerUnitsByModel.value = printerSummary
+    printerUnitsByModel.value = readingSummary.unitsByModel
+    collectorHostnamesByPrinthead.value
+      = readingSummary.collectorHostnamesByPrinthead
   } catch (err) {
     if (requestId !== currentRequest) return
     error.value = err instanceof Error ? err.message : String(err)
@@ -153,7 +182,8 @@ const activePrintheadCategories = computed(() =>
 const activePrintheadAnnotations = computed<BarAnnotation[]>(() =>
   activePrintheads.value.map(benchmark => ({
     label: benchmark.lastModel ?? 'Unknown model',
-    sublabel: benchmark.printheadId
+    sublabel: benchmark.printheadId,
+    hostnames: collectorHostnamesByPrinthead.value[benchmark.printheadId] ?? []
   }))
 )
 

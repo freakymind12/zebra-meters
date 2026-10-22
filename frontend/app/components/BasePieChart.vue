@@ -80,7 +80,7 @@ function hostnameSection(hostnames: string[], colors: ChartPalette): string {
   return '<div style="margin-top:8px;padding-top:8px;'
     + `border-top:1px solid ${colors.tooltipBorder}">`
     + '<div style="margin-bottom:4px;font-size:11px;font-weight:600;'
-    + `color:${colors.muted}">Collector Hostnames (${hostnames.length})</div>`
+    + `color:${colors.muted}">Station (${hostnames.length})</div>`
     + `<div style="display:flex;flex-wrap:wrap;gap:4px">${chips.join('')}</div>`
     + '</div>'
 }
