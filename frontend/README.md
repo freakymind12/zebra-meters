@@ -64,12 +64,24 @@ Untuk mengganti target API proxy server-side Nitro, gunakan `NUXT_API_BASE`.
 `app/components/BenchmarkTable.vue` mengambil data dari `GET /api/printhead-benchmark` (lihat [kontrak API](../api/README.md)) dan menyediakan:
 
 - **Filter model** — `USelect` berisi opsi **“Semua Model”** (default) plus semua nilai `lastModel` unik dari seluruh dataset (field `models` pada response). Memilih model memuat ulang data dan mengembalikan ke halaman 1.
+- **Filter status** — `USelect` **“Semua Status”** (default) / **Active** / **Inactive**, diteruskan sebagai query `status=ACTIVE|INACTIVE` sehingga filter, `count`, dan pagination dihitung di server.
+- **Kolom Collector Host** — hostname collector dari reading terbaru printhead (lokasi/stasiun terakhir head terpasang), atau `-` bila tidak tersedia.
+- **Kolom Status** — badge `Active` (hijau) / `Inactive` (netral) dari kolom `status` benchmark.
 - **Sortir lewat header kolom** — klik header kolom numerik (Readings, Lifespan, Head Usage Delta, Odometer Delta, Label Delta) untuk mengurutkan. Sortir dijalankan **di server** (`sort` + `direction`), tidak hanya pada halaman yang sedang tampil. Default: `head_usage_delta` menurun (desc).
-- **Paginasi server-side** — `UPagination` memakai total `count` dari API. Ukuran halaman default **50** dengan pilihan **20 / 50 / 100**. Mengubah ukuran halaman, model, atau sortir mengembalikan ke halaman 1.
+- **Paginasi server-side** — `UPagination` memakai total `count` dari API. Ukuran halaman default **50** dengan pilihan **20 / 50 / 100**. Mengubah ukuran halaman, model, status, atau sortir mengembalikan ke halaman 1.
 - **Refresh** — memuat ulang halaman/kueri yang sedang aktif.
 - **Status** — alert saat gagal memuat, indikator loading, dan empty state saat tidak ada data.
 
 Semua label antarmuka memakai Bahasa Indonesia agar konsisten dengan aplikasi.
+
+## Tema & Logo
+
+Header memakai komponen `app/components/ZebraLogo.vue`, yaitu SVG **inline** (bukan `<img>`) sehingga bisa mewarisi token Nuxt UI secara langsung:
+
+- ikon dan kata “Meter” memakai `var(--ui-primary)` — otomatis mengikuti preset primary dan berubah light/dark;
+- kata “Zebra” memakai `var(--ui-text-highlighted)`.
+
+Karena warnanya bersumber dari token, tidak perlu file logo terpisah per color mode. Mengganti preset warna (mis. lewat `ui.colors.primary` di `app.config.ts`) ikut mengubah logo tanpa menyentuh SVG.
 
 ## Deployment dengan Docker
 
@@ -115,7 +127,7 @@ Pipeline memakai port host `3001` dan API `http://api:3000` secara default. Bila
 
 ```
 app/
-├── components/    BenchmarkTable.vue, ReadingsTable.vue, ReadingDetailModal.vue
+├── components/    BenchmarkTable.vue, ReadingsTable.vue, ReadingDetailModal.vue, ZebraLogo.vue
 ├── composables/   useZebraApi.ts (client API + formatter id-ID)
 ├── pages/         index.vue (dashboard)
 └── types/         api.ts (tipe mirror schema OpenAPI API)

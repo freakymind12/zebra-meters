@@ -168,7 +168,7 @@ Docker Compose juga menolak start bila `MYSQL_ROOT_PASSWORD` atau `MYSQL_PASSWOR
 | `GET` | `/openapi.json` | OpenAPI 3.0 document |
 | `POST` | `/api/printer-meter` | Simpan reading printer |
 | `GET` | `/api/printer-meter?page=1&limit=20` | Baca reading terbaru dengan filter printer/printhead/bulan dan pagination server-side |
-| `GET` | `/api/printhead-benchmark` | Baca benchmark count per printhead (filter model, sortir, paginasi server-side) |
+| `GET` | `/api/printhead-benchmark` | Baca benchmark count per printhead (filter model/status, sortir, paginasi server-side) |
 
 Semua response memakai envelope global:
 
@@ -253,6 +253,7 @@ curl "http://localhost:3000/api/printhead-benchmark?head=PH18D3402A001"
 | `page` | `1` | Nomor halaman (1-based). Nilai non-integer atau non-positif → **400 Validation Error**. |
 | `limit` | `50` | Ukuran halaman. Omitted/invalid/non-positif → default `50`. Nilai `> 100` di-*cap* ke `100`. Maksimum `100`. |
 | `model` | omitted | Filter `lastModel` persis. Omitted/empty = semua model. |
+| `status` | omitted | Filter status pemeliharaan: `ACTIVE` \| `INACTIVE`. Nilai lain → **400 Validation Error**. |
 | `sort` | `head_usage_delta` | Kunci sortir (whitelist). Nilai di luar whitelist → default. **Hanya kolom numerik** yang diizinkan. |
 | `direction` | `desc` | Arah sortir: `asc` \| `desc`. Nilai lain → **400 Validation Error**. |
 | `head` | omitted | Filter `printheadId` persis (legacy). |
@@ -283,8 +284,8 @@ curl "http://localhost:3000/api/printhead-benchmark?head=PH18D3402A001"
 }
 ```
 
-- **`count`** — total baris yang cocok dengan filter aktif (`head`, `model`) di **seluruh dataset**, bukan hanya halaman ini.
-- **`data`** — hanya baris pada halaman yang diminta.
+- **`count`** — total baris yang cocok dengan filter aktif (`head`, `model`, `status`) di **seluruh dataset**, bukan hanya halaman ini.
+- **`data`** — hanya baris pada halaman yang diminta. Tiap baris menyertakan `status` (`ACTIVE`/`INACTIVE`) dan `collectorHostname`, yaitu hostname collector dari reading **terbaru** printhead tersebut (lokasi/stasiun terakhir head terpasang). Nilainya `null` bila reading terbaru tidak punya hostname.
 - **`models`** — semua nilai `lastModel` unik non-null dari seluruh dataset (tidak dipengaruhi filter halaman/model).
 
 ### Error 400 (Validation Failed)
@@ -309,6 +310,9 @@ curl "http://localhost:3000/api/printhead-benchmark?head=PH18D3402A001"
 | `bun run db:migrate:dev` | Jalankan migration ke database development (`.env`) |
 | `bun run db:migrate:prod` | Jalankan migration dengan koneksi database production (`.env.production`) |
 | `bun run db:studio` | Buka Drizzle Studio |
+| `bun run benchmark:migrate` | Pasang ulang SP benchmark + event scheduler (idempoten) |
+| `bun run benchmark:refresh` | Jalankan SP refresh benchmark (opsi `--head`, `--rebuild`, `--apply-only`) |
+| `bun run benchmark:verify` | Verifikasi hasil refresh benchmark |
 
 ## Migrations (Drizzle Kit)
 
@@ -338,6 +342,8 @@ bun run db:migrate:prod      # apply migration ke DB production (.env.production
 ```
 
 Selain itu, container API otomatis menjalankan `drizzle-kit migrate` saat start (lihat `Dockerfile` CMD), sehingga migration yang sudah di-commit akan ter-apply saat deploy.
+
+Stored procedure benchmark tidak dikelola drizzle-kit. Setelah migration yang mengubah `printhead_benchmarks` (mis. menambah `collector_hostname`), jalankan `bun run benchmark:migrate` lalu `bun run benchmark:refresh` agar SP terpasang ulang dan kolom turunan terisi untuk data lama.
 
 ## Catatan Keamanan
 

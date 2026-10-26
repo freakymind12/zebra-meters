@@ -51,6 +51,8 @@ export interface PrintheadBenchmark {
   lastPrinterId: number | null
   firstModel: string | null
   lastModel: string | null
+  /** Collector hostname dari reading terbaru — lokasi/stasiun terakhir head ini. */
+  collectorHostname: string | null
   firstSeenAt: string
   lastSeenAt: string
   readingCount: number

@@ -55,52 +55,7 @@ const currentYear = new Date().getFullYear()
           aria-label="ZebraMeter, kembali ke beranda"
           class="flex items-center gap-3 rounded-md transition-transform duration-200 ease-out hover:scale-[1.02] active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary motion-reduce:transition-none motion-reduce:hover:scale-100 motion-reduce:active:scale-100"
         >
-          <svg
-            class="size-7 text-primary sm:size-8"
-            viewBox="0 0 28 28"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <rect
-              x="0"
-              y="16"
-              width="4"
-              height="12"
-              rx="2"
-            />
-            <rect
-              x="6"
-              y="8"
-              width="4"
-              height="20"
-              rx="2"
-            />
-            <rect
-              x="12"
-              y="0"
-              width="4"
-              height="28"
-              rx="2"
-            />
-            <rect
-              x="18"
-              y="12"
-              width="4"
-              height="16"
-              rx="2"
-            />
-            <rect
-              x="24"
-              y="6"
-              width="4"
-              height="22"
-              rx="2"
-            />
-          </svg>
-
-          <span class="text-2xl leading-none font-bold tracking-tight text-highlighted sm:text-[1.75rem]">
-            ZebraMeter
-          </span>
+          <ZebraLogo class="h-10 w-auto" />
         </NuxtLink>
       </template>
 
@@ -109,12 +64,16 @@ const currentYear = new Date().getFullYear()
           <!-- Ticking Clock dibungkus ClientOnly agar tidak Hydration Error -->
           <ClientOnly>
             <!-- tabular-nums mencegah lebar jam bergetar tiap detik -->
-            <span class="hidden text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400 lg:block">
+            <span
+              class="hidden text-sm font-medium tabular-nums text-gray-500 dark:text-gray-400 lg:block"
+            >
               {{ formattedTime }}
             </span>
             <!-- Fallback saat loading di sisi server -->
             <template #fallback>
-              <div class="hidden h-5 w-56 animate-pulse rounded-md bg-gray-200 dark:bg-gray-800 lg:block" />
+              <div
+                class="hidden h-5 w-56 animate-pulse rounded-md bg-gray-200 dark:bg-gray-800 lg:block"
+              />
             </template>
           </ClientOnly>
 
@@ -129,13 +88,18 @@ const currentYear = new Date().getFullYear()
     </UMain>
 
     <!-- Footer -->
-    <footer class="border-t border-gray-200 bg-white/50 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/50">
-      <div class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-6 sm:px-6 md:flex-row lg:px-8">
+    <footer
+      class="border-t border-gray-200 bg-white/50 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/50"
+    >
+      <div
+        class="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 py-6 sm:px-6 md:flex-row lg:px-8"
+      >
         <p class="text-sm text-gray-500 dark:text-gray-400">
           &copy; {{ currentYear }} ZebraMeter
         </p>
         <p class="text-sm text-gray-500 dark:text-gray-400">
-          Created By <a
+          Created By
+          <a
             href="#"
             class="font-medium text-primary transition-colors duration-150 ease-out hover:underline"
           >Rian Kurniawan (Using Free Tier LLM Model)</a>

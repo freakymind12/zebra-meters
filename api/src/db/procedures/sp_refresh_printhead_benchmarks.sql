@@ -33,6 +33,9 @@
 --     Acuan utama count/benchmark head = `head_usage_delta` dan
 --     `printhead_odometer_delta` (keduanya odometer monoton naik).
 --   * reading_count = COUNT(*) row valid per head.
+--   * collector_hostname = collector_hostname dari reading terbaru
+--     (MAX measured_at, tiebreak id terbesar) — lokasi/stasiun terakhir
+--     tempat head ini terpasang.
 --   * lifespan_minutes = TIMESTAMPDIFF(MINUTE, first_seen, last_seen).
 --   * has_negative_delta = 1 bila ada delta < 0.
 --   * status (ACTIVE/INACTIVE) dihitung ulang di akhir prosedur
@@ -104,7 +107,7 @@ BEGIN
   END IF;
   INSERT INTO `printhead_benchmarks` (
     `printhead_id`, `first_printer_id`, `last_printer_id`,
-    `first_model`, `last_model`,
+    `first_model`, `last_model`, `collector_hostname`,
     `first_seen_at`, `last_seen_at`,
     `reading_count`, `lifespan_minutes`,
     `total_label_count_first`, `total_label_count_first_at`,
@@ -128,6 +131,7 @@ BEGIN
   )
   WITH ranked AS (
     SELECT m.`printhead_id`, m.`id`, m.`printer_id`, m.`measured_at`,
+      m.`collector_hostname`,
       m.`total_label_count`, m.`total_print_length`,
       m.`printhead_odometer`, m.`head_usage`,
       m.`ribbon_length`, m.`media_length`,
@@ -150,6 +154,7 @@ BEGIN
       MAX(r.`max_at`) AS last_seen_at,
       MAX(CASE WHEN r.rn_asc = 1 THEN r.`printer_id` END) AS f_pid,
       MAX(CASE WHEN r.rn_desc = 1 THEN r.`printer_id` END) AS l_pid,
+      MAX(CASE WHEN r.rn_desc = 1 THEN r.`collector_hostname` END) AS col_host,
       MAX(CASE WHEN r.rn_asc = 1 THEN r.`total_label_count` END) AS tlc_f,
       MAX(CASE WHEN r.rn_desc = 1 THEN r.`total_label_count` END) AS tlc_l,
       MAX(CASE WHEN r.rn_asc = 1 THEN r.`total_print_length` END) AS tpl_f,
@@ -166,7 +171,7 @@ BEGIN
     GROUP BY r.`printhead_id`
   )
   SELECT a.ph,
-    a.f_pid, a.l_pid, pf.`model`, pl.`model`,
+    a.f_pid, a.l_pid, pf.`model`, pl.`model`, a.col_host,
     a.first_seen_at, a.last_seen_at, a.reading_count,
     TIMESTAMPDIFF(MINUTE, a.first_seen_at, a.last_seen_at),
     a.tlc_f, CASE WHEN a.tlc_f IS NULL THEN NULL ELSE a.first_seen_at END,
@@ -203,6 +208,7 @@ BEGIN
     `last_printer_id` = VALUES(`last_printer_id`),
     `first_model` = VALUES(`first_model`),
     `last_model` = VALUES(`last_model`),
+    `collector_hostname` = VALUES(`collector_hostname`),
     `first_seen_at` = VALUES(`first_seen_at`),
     `last_seen_at` = VALUES(`last_seen_at`),
     `reading_count` = VALUES(`reading_count`),

@@ -20,6 +20,15 @@ const limitOptions = [
 const ALL_MODELS_VALUE = '__all__'
 const model = ref(ALL_MODELS_VALUE)
 
+// Filter status pemeliharaan head. API-side: undefined = semua status.
+const ALL_STATUS_VALUE = '__all__'
+const statusFilter = ref<'ACTIVE' | 'INACTIVE' | typeof ALL_STATUS_VALUE>(ALL_STATUS_VALUE)
+const statusItems = [
+  { label: 'Semua Status', value: ALL_STATUS_VALUE },
+  { label: 'Active', value: 'ACTIVE' },
+  { label: 'Inactive', value: 'INACTIVE' }
+]
+
 const page = ref(1)
 const total = ref(0)
 const models = ref<string[]>([])
@@ -77,6 +86,7 @@ async function load() {
       page: page.value,
       limit: limit.value,
       model: model.value !== ALL_MODELS_VALUE ? model.value : undefined,
+      status: statusFilter.value !== ALL_STATUS_VALUE ? statusFilter.value : undefined,
       sort: sortKey.value,
       direction: sortDirection.value
     })
@@ -100,7 +110,7 @@ async function load() {
 }
 
 // Satu sumber reload. Saat filter/ukuran/sorting berubah, reset ke halaman 1.
-watch([limit, model, sorting], () => {
+watch([limit, model, statusFilter, sorting], () => {
   if (page.value !== 1) {
     // watch(page) di bawah yang akan memicu load — hindari load ganda.
     page.value = 1
@@ -130,14 +140,23 @@ const columns: TableColumn<PrintheadBenchmark>[] = [
     cell: ({ row }) => row.original.lastModel ?? '-'
   },
   {
-    accessorKey: 'firstSeenAt',
-    header: 'First Seen',
-    cell: ({ row }) => formatDateTime(row.original.firstSeenAt)
+    accessorKey: 'collectorHostname',
+    header: 'Collector Host',
+    cell: ({ row }) => row.original.collectorHostname ?? '-'
   },
   {
     accessorKey: 'lastSeenAt',
     header: 'Last Seen',
     cell: ({ row }) => formatDateTime(row.original.lastSeenAt)
+  },
+  {
+    accessorKey: 'status',
+    header: 'Status',
+    cell: ({ row }) => h(UBadge, {
+      color: row.original.status === 'ACTIVE' ? 'success' : 'neutral',
+      variant: 'subtle',
+      size: 'xs'
+    }, () => row.original.status === 'ACTIVE' ? 'Active' : 'Inactive')
   },
   {
     accessorKey: 'readingCount',
@@ -186,6 +205,15 @@ const columns: TableColumn<PrintheadBenchmark>[] = [
         size="xs"
         class="w-48"
         aria-label="Filter model"
+      />
+      <USelect
+        v-model="statusFilter"
+        :items="statusItems"
+        value-key="value"
+        icon="i-lucide-activity"
+        size="xs"
+        class="w-40"
+        aria-label="Filter status"
       />
       <USelect
         v-model="limit"

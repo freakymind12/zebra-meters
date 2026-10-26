@@ -144,12 +144,12 @@ Dashboard default tersedia di `http://localhost:3001` melalui Nginx dalam satu c
 | `GET` | `/openapi.json` | OpenAPI 3.0 document |
 | `POST` | `/api/printer-meter` | Terima data meter dari client (payload: `printerId`, `model`, `ipAddress`, `measuredAt`, `collectorHostname`, `collectorIp`, `printheadId`, `meters`, `rawMeters`) |
 | `GET` | `/api/printer-meter?page=1&limit=20` | Baca reading terbaru dengan filter printer/printhead/bulan dan paginasi |
-| `GET` | `/api/printhead-benchmark?page=1&limit=50&model=&sort=head_usage_delta&direction=desc` | Benchmark count per printhead (filter model, sortir numerik, paginasi server-side) |
+| `GET` | `/api/printhead-benchmark?page=1&limit=50&model=&status=&sort=head_usage_delta&direction=desc` | Benchmark count per printhead (filter model/status, sortir numerik, paginasi server-side) |
 
 - Endpoint **tanpa API key** — collector cukup menjangkau API.
 - Response memakai envelope global: `{ "success": true, "data": ... }` atau `{ "success": false, "error": ... }`. Sukses POST: `201 { "success": true, "data": { "id": <readingId>, ... } }`.
-- `/api/printhead-benchmark` mengembalikan `{ count, data, models }`: `count` adalah **total baris yang cocok dengan filter (seluruh halaman)**, `data` hanya baris pada halaman yang diminta, dan `models` berisi semua nilai `lastModel` unik untuk mengisi filter. Detail parameter dan contoh ada di [`api/README.md`](api/README.md).
-- Dashboard web Nuxt (`frontend/`) menampilkan tabel benchmark ini dengan **filter model** (`lastModel`, termasuk opsi default “Semua Model”), **sortir numerik via header kolom** (Readings, Lifespan, Head Usage Delta, Odometer Delta, Label Delta), dan **paginasi server-side** (default 50 baris; pilihan 20/50/100). Detail ada di [`frontend/README.md`](frontend/README.md).
+- `/api/printhead-benchmark` mengembalikan `{ count, data, models }`: `count` adalah **total baris yang cocok dengan filter (seluruh halaman)**, `data` hanya baris pada halaman yang diminta, dan `models` berisi semua nilai `lastModel` unik untuk mengisi filter. Tiap baris menyertakan `status` (`ACTIVE`/`INACTIVE`) serta `collectorHostname` dari reading terbaru (stasiun terakhir head terpasang). Detail parameter dan contoh ada di [`api/README.md`](api/README.md).
+- Dashboard web Nuxt (`frontend/`) menampilkan tabel benchmark ini dengan **filter model** (`lastModel`, termasuk opsi default “Semua Model”) dan **filter status** (Active/Inactive), kolom **Collector Host** dan **Status**, **sortir numerik via header kolom** (Readings, Lifespan, Head Usage Delta, Odometer Delta, Label Delta), serta **paginasi server-side** (default 50 baris; pilihan 20/50/100). Detail ada di [`frontend/README.md`](frontend/README.md).
 - Tabel Historical Readings menyediakan filter select untuk printhead, IP address, model, printer ID, dan hostname; pemilih bulan `measuredAt`; pagination server-side; serta sorting header server-side untuk tanggal dan seluruh nilai meter numerik. Endpoint mengembalikan total hasil terfilter dan opsi filter unik. Detail parameter ada di [`api/README.md`](api/README.md).
 
 ## Perintah API Berguna
@@ -162,15 +162,18 @@ Dashboard default tersedia di `http://localhost:3001` melalui Nginx dalam satu c
 | `bun run db:generate` | Buat file migration SQL dari perubahan schema |
 | `bun run db:migrate:dev` | Jalankan migration ke DB development |
 | `bun run db:studio` | Buka Drizzle Studio (browse data) |
+| `bun run benchmark:migrate` | Pasang ulang SP benchmark + event scheduler |
+| `bun run benchmark:refresh` | Refresh tabel benchmark dari `meter_readings` |
 
 ## Database Schema (Drizzle)
 
-Dua tabel di `api/src/db/schema.ts`:
+Tiga tabel di `api/src/db/schema.ts`:
 
 - **`printers`** — daftar printer (`printerId` unik, `model`, `ipAddress`), di-upsert tiap POST.
 - **`meter_readings`** — satu baris per pengukuran:
   - kolom split per meter (`totalLabelCount`, `totalPrintLength`, `printheadOdometer`, `headUsage`, `ribbonLength`, `mediaLength`) → memudahkan query operasional;
   - kolom `rawMeters` (JSON) → **source of truth** payload asli dari client, termasuk raw string & error per meter.
+- **`printhead_benchmarks`** — agregat per `printheadId` hasil SP `sp_refresh_printhead_benchmarks`: nilai first/last/delta tiap meter, `readingCount`, `lifespanMinutes`, `status` (`ACTIVE`/`INACTIVE`), serta `collectorHostname` dari reading terbaru (stasiun terakhir head terpasang). Satu baris per printhead (`printhead_id` unik).
 
 > Jika menambah meter baru di `clients/config.json`, tambahkan kolomnya di `schema.ts` lalu jalankan `bun run db:generate` + `bun run db:migrate:dev`. Sampai itu dilakukan, data meter baru tetap aman tersimpan di kolom `rawMeters`.
 

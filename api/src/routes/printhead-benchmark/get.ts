@@ -55,6 +55,7 @@ app.openapi(benchmarkRoute, async (c) => {
   const page = query.page ? Number(query.page) : 1
   const head = typeof query.head === 'string' && query.head.trim() !== '' ? query.head.trim() : null
   const model = typeof query.model === 'string' && query.model.trim() !== '' ? query.model.trim() : null
+  const status = query.status ?? null
   const direction = query.direction ?? 'desc'
   const sortColumn = resolveSortColumn(query.sort)
 
@@ -62,6 +63,7 @@ app.openapi(benchmarkRoute, async (c) => {
   const filters: SQL[] = []
   if (head) filters.push(eq(printheadBenchmarks.printheadId, head))
   if (model) filters.push(eq(printheadBenchmarks.lastModel, model))
+  if (status) filters.push(eq(printheadBenchmarks.status, status))
   const where = filters.length ? and(...filters) : undefined
 
   const orderBy = [
@@ -102,6 +104,7 @@ app.openapi(benchmarkRoute, async (c) => {
       lastPrinterId: r.lastPrinterId,
       firstModel: r.firstModel,
       lastModel: r.lastModel,
+      collectorHostname: r.collectorHostname,
       firstSeenAt: r.firstSeenAt.toISOString(),
       lastSeenAt: r.lastSeenAt.toISOString(),
       readingCount: r.readingCount,

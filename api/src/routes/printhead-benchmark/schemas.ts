@@ -38,6 +38,14 @@ export const benchmarkQuerySchema = z
         description: 'Filter by exact lastModel',
         example: 'ZT620',
       }),
+    status: z
+      .enum(['ACTIVE', 'INACTIVE'])
+      .optional()
+      .openapi({
+        param: { name: 'status', in: 'query' },
+        description: 'Filter status pemeliharaan head: ACTIVE | INACTIVE',
+        example: 'ACTIVE',
+      }),
     sort: z
       .string()
       .optional()
@@ -71,6 +79,7 @@ export const benchmarkItemSchema = z
     lastPrinterId: z.number().nullable(),
     firstModel: z.string().nullable(),
     lastModel: z.string().nullable(),
+    collectorHostname: z.string().nullable(),
     firstSeenAt: z.string().openapi({ format: 'date-time' }),
     lastSeenAt: z.string().openapi({ format: 'date-time' }),
     readingCount: z.number().int(),
@@ -94,6 +103,7 @@ export const benchmarkItemSchema = z
     mediaLengthLast: z.number().nullable(),
     mediaLengthDelta: z.number().nullable(),
     hasNegativeDelta: z.boolean(),
+    status: z.enum(['ACTIVE', 'INACTIVE']),
     updatedAt: z.string().openapi({ format: 'date-time' }),
   })
   .openapi('PrintheadBenchmark')

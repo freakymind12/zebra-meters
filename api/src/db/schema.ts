@@ -159,6 +159,10 @@ export const printheadBenchmarks = mysqlTable(
     firstModel: varchar('first_model', { length: 100 }),
     lastModel: varchar('last_model', { length: 100 }),
 
+    // Lokasi terakhir head terpasang: collector hostname dari reading
+    // terbaru (MAX measured_at) untuk printhead ini di `meter_readings`.
+    collectorHostname: varchar('collector_hostname', { length: 255 }),
+
     firstSeenAt: timestamp('first_seen_at').notNull(),
     lastSeenAt: timestamp('last_seen_at').notNull(),
 

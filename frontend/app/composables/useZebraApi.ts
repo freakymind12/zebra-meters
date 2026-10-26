@@ -64,6 +64,7 @@ export function useZebraApi() {
     limit?: number
     head?: string
     model?: string
+    status?: 'ACTIVE' | 'INACTIVE'
     sort?: string
     direction?: 'asc' | 'desc'
   } = {}) {
@@ -73,6 +74,7 @@ export function useZebraApi() {
       head: opts.head,
       // Model kosong berarti "semua model" — jangan kirim "undefined" ke API.
       model: opts.model ? opts.model : undefined,
+      status: opts.status,
       sort: opts.sort,
       direction: opts.direction
     })

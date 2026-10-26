@@ -1,0 +1,1 @@
+ALTER TABLE `printhead_benchmarks` ADD `collector_hostname` varchar(255);
