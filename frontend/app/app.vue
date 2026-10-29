@@ -97,12 +97,18 @@ const currentYear = new Date().getFullYear()
         <p class="text-sm text-gray-500 dark:text-gray-400">
           &copy; {{ currentYear }} ZebraMeter
         </p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          Created By
-          <a
-            href="#"
-            class="font-medium text-primary transition-colors duration-150 ease-out hover:underline"
-          >Rian Kurniawan (Using Free Tier LLM Model)</a>
+        <p class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+          <UButton
+            to="https://github.com/freakymind12/zebra-meters"
+            target="_blank"
+            rel="noopener noreferrer"
+            icon="i-simple-icons-github"
+            color="neutral"
+            variant="ghost"
+            size="md"
+            square
+            aria-label="Lihat repository ZebraMeter di GitHub"
+          />
         </p>
       </div>
     </footer>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 useSeoMeta({
-  title: 'Printer Metrics — ZebraMeter',
+  title: 'ZebraMeter - Dashboard',
   description: 'Monitor reading meter printer Zebra dan benchmark printhead.'
 })
 </script>
